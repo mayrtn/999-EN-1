@@ -1,0 +1,34 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# build / dist
+/dist
+/build
+/out
+*.tsbuildinfo
+
+# testing
+/coverage
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# env / secrets
+.env
+.env*.local
+!.env.example
+
+# infra / aws
+*.pem
+cdk.out/
+.serverless/
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/
