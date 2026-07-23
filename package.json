@@ -1,0 +1,32 @@
+{
+  "name": "arcade-ia-mutante",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Arcade IA Mutante - juego arcade 8-bit con IA central hibrida (Phaser 3 + TypeScript)",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run build:client",
+    "build:client": "tsc --noEmit && vite build",
+    "build:lambda": "node scripts/build-lambda.mjs",
+    "build:all": "npm run build:client && npm run build:lambda",
+    "package": "npm run build:all",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "3.658.1",
+    "phaser": "3.80.1"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "8.10.145",
+    "@types/node": "20.14.15",
+    "esbuild": "0.21.5",
+    "fast-check": "3.23.1",
+    "typescript": "5.6.3",
+    "vite": "5.4.10",
+    "vitest": "2.1.8"
+  }
+}

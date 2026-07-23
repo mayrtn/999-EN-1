@@ -1,0 +1,27 @@
+{
+  "name": "arcade-ia-mutante-infra",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Infraestructura como codigo (AWS CDK) para Arcade IA Mutante: S3 + CloudFront + API Gateway + Lambda + Bedrock",
+  "bin": {
+    "arcade-ia-mutante-infra": "bin/app.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy",
+    "bootstrap": "cdk bootstrap"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.15",
+    "aws-cdk": "2.160.0",
+    "ts-node": "10.9.2",
+    "typescript": "5.6.3"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.160.0",
+    "constructs": "10.3.0"
+  }
+}
