@@ -39,7 +39,7 @@ export class LoadingScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#0b0b12');
     this.add
       .text(width / 2, height / 2, TEXTO_CARGA, {
-        fontFamily: 'PlanesValMore',
+        fontFamily: '"Press Start 2P"',
         fontSize: '28px',
         color: '#7cf9ff',
       })

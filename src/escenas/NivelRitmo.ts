@@ -392,7 +392,7 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
   private crearHud(): void {
     this.hud = this.add
       .text(12, 12, '', {
-        fontFamily: 'PlanesValMore',
+        fontFamily: '"Press Start 2P"',
         fontSize: '16px',
         color: '#7cf9ff',
       })
