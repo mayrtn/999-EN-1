@@ -80,22 +80,31 @@ export class EscenaSeleccion extends Phaser.Scene {
     // Colores para placeholders cuando la textura no se cargó
     const placeholderColors = [0xff69b4, 0x8b4513, 0x4682b4];
 
-    // --- Fondo gradiente ---
+    // --- Fondo gradiente (mismo que la portada) ---
     const gfx = this.add.graphics();
-    const colorTop = 0x1a0a2e;
-    const colorBottom = 0x16213e;
+    const cTop = 0x05000d;
+    const cMid = 0x0d0026;
+    const cBot = 0x000a1a;
     for (let y = 0; y < canvasHeight; y++) {
       const t = y / canvasHeight;
-      const r = ((colorTop >> 16) & 0xff) + t * (((colorBottom >> 16) & 0xff) - ((colorTop >> 16) & 0xff));
-      const g = ((colorTop >> 8) & 0xff) + t * (((colorBottom >> 8) & 0xff) - ((colorTop >> 8) & 0xff));
-      const b = (colorTop & 0xff) + t * ((colorBottom & 0xff) - (colorTop & 0xff));
+      let r: number, g: number, b: number;
+      if (t < 0.5) {
+        const t2 = t * 2;
+        r = ((cTop >> 16) & 0xff) + t2 * (((cMid >> 16) & 0xff) - ((cTop >> 16) & 0xff));
+        g = ((cTop >> 8) & 0xff) + t2 * (((cMid >> 8) & 0xff) - ((cTop >> 8) & 0xff));
+        b = (cTop & 0xff) + t2 * ((cMid & 0xff) - (cTop & 0xff));
+      } else {
+        const t2 = (t - 0.5) * 2;
+        r = ((cMid >> 16) & 0xff) + t2 * (((cBot >> 16) & 0xff) - ((cMid >> 16) & 0xff));
+        g = ((cMid >> 8) & 0xff) + t2 * (((cBot >> 8) & 0xff) - ((cMid >> 8) & 0xff));
+        b = (cMid & 0xff) + t2 * ((cBot & 0xff) - (cMid & 0xff));
+      }
       const color = (Math.floor(r) << 16) | (Math.floor(g) << 8) | Math.floor(b);
       gfx.fillStyle(color, 1);
       gfx.fillRect(0, y, canvasWidth, 1);
     }
 
     // --- Partículas (estrellas/chispas decorativas) ---
-    // Crear una textura pequeña para las partículas
     if (!this.textures.exists('_particle_star')) {
       const pg = this.make.graphics({ x: 0, y: 0 }, false);
       pg.fillStyle(0xffffff, 1);
@@ -107,16 +116,24 @@ export class EscenaSeleccion extends Phaser.Scene {
       x: { min: 0, max: canvasWidth },
       y: { min: 0, max: canvasHeight },
       scale: { start: 0.3, end: 0 },
-      alpha: { start: 0.6, end: 0 },
-      speed: { min: 5, max: 20 },
-      lifespan: 3000,
-      frequency: 200,
+      alpha: { start: 0.5, end: 0 },
+      speed: { min: 2, max: 8 },
+      lifespan: 5000,
+      frequency: 300,
       blendMode: 'ADD',
     });
 
+    // --- Scanlines CRT sutiles ---
+    const scanGfx = this.add.graphics();
+    scanGfx.setAlpha(0.03);
+    for (let y = 0; y < canvasHeight; y += 3) {
+      scanGfx.fillStyle(0x000000, 1);
+      scanGfx.fillRect(0, y, canvasWidth, 1);
+    }
+
     // Título "Elige tu personaje" en el 20% superior, centrado horizontalmente
     this.add.text(canvasWidth / 2, canvasHeight * 0.12, 'Elige tu personaje', {
-      fontFamily: 'PlanesValMore',
+      fontFamily: '"Press Start 2P"',
       fontSize: '32px',
       color: '#ffd700',
       align: 'center',
@@ -158,7 +175,7 @@ export class EscenaSeleccion extends Phaser.Scene {
 
         // Texto del nombre del personaje sobre el placeholder
         this.add.text(x, positionY, personaje.nombre, {
-          fontFamily: 'PlanesValMore',
+          fontFamily: '"Press Start 2P"',
           fontSize: '12px',
           color: '#ffffff',
           align: 'center',
@@ -173,7 +190,7 @@ export class EscenaSeleccion extends Phaser.Scene {
 
       // Etiqueta de nombre debajo del sprite
       this.add.text(x, positionY + 48 + 40, personaje.nombre, {
-        fontFamily: 'PlanesValMore',
+        fontFamily: '"Press Start 2P"',
         fontSize: '16px',
         color: '#ffffff',
         align: 'center',
@@ -182,7 +199,7 @@ export class EscenaSeleccion extends Phaser.Scene {
 
     // --- Instrucciones de control ---
     this.add.text(canvasWidth / 2, canvasHeight - 40, '← →  Navegar   |   Enter  Confirmar', {
-      fontFamily: 'PlanesValMore',
+      fontFamily: '"Press Start 2P"',
       fontSize: '14px',
       color: '#aaaaaa',
       align: 'center',

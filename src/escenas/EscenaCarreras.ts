@@ -105,7 +105,7 @@ export class EscenaCarreras extends Phaser.Scene implements IEscena {
     const { width, height } = this.scale;
     this.add
       .text(width / 2, height / 2, 'Escena_Carreras (proximamente)', {
-        fontFamily: 'PlanesValMore',
+        fontFamily: '"Press Start 2P"',
         fontSize: '20px',
         color: '#7cf9ff',
       })

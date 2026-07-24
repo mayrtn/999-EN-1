@@ -14,3 +14,4 @@ export { NivelShooter } from './NivelShooter';
 export type { NivelShooterOpciones } from './NivelShooter';
 export { EscenaCarreras } from './EscenaCarreras';
 export { EscenaSeleccion } from './EscenaSeleccion';
+export { PortadaScene } from './PortadaScene';
