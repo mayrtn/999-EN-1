@@ -28,6 +28,7 @@ import {
   NivelShooter,
   EscenaCarreras,
 } from '../escenas';
+import { EscenaSeleccion } from '../escenas/EscenaSeleccion';
 
 /**
  * Tipo de una Escena jugable: una `Phaser.Scene` que además cumple el
@@ -66,6 +67,7 @@ export interface RegistroEscena {
  * modificar el {@link SceneManager}.
  */
 export const REGISTRO_ESCENAS: RegistroEscena[] = [
+  { id: 'seleccion_personaje', crear: () => new EscenaSeleccion() as unknown as EscenaJugable, habilitada: true },
   { id: 'plataformas', crear: () => new NivelPlataformas(), habilitada: true },
   { id: 'ritmo', crear: () => new NivelRitmo(), habilitada: true },
   { id: 'shooter', crear: () => new NivelShooter(), habilitada: true },

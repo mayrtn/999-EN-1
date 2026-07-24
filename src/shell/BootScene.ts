@@ -69,14 +69,57 @@ export class BootScene extends Phaser.Scene {
   /**
    * Precarga de assets COMUNES a todas las Escenas.
    *
-   * FASE 1 — No hay assets de arte reales todavía: las Escenas generan su propia
-   * "programmer art" en runtime. Los assets CC0 compartidos (fuentes de bitmap,
-   * spritesheets comunes, pistas de audio del {@link GestorAudio}) se cargarán
-   * aquí en Fase 3. Se deja como no-op seguro para no bloquear el arranque.
+   * Carga los spritesheets idle de los tres personajes seleccionables
+   * (Requirement 5.1) antes de que la Escena_Seleccion inicie, garantizando
+   * reproducción inmediata de las animaciones. Cada spritesheet contiene 4 frames
+   * de 32×32 píxeles.
+   *
+   * Si un asset falla al cargar, se registra el error en consola y la carga
+   * continúa sin interrumpir el arranque (Requirement 5.3).
    */
   preload(): void {
-    // Sin assets comunes en Fase 1. Los assets CC0 compartidos se cargan aquí
-    // en Fase 3 (Requirement 11.2 de assets).
+    // Registrar handler de error de carga para que un fallo en un spritesheet
+    // no interrumpa la transición a la Escena_Seleccion (Requirement 5.3).
+    this.load.on('loaderror', (file: Phaser.Loader.File) => {
+      console.error(
+        `[BootScene] Failed to load asset: "${file.key}" (${file.url})`,
+      );
+    });
+
+    // Spritesheets idle para la pantalla de selección de personaje (Requirement 5.1).
+    // Cada spritesheet tiene 4 frames de 32×32 píxeles.
+    this.load.spritesheet(
+      'pink_monster_idle',
+      'src/assets/personajes/1 Pink_Monster/Pink_Monster_Idle_4.png',
+      { frameWidth: 32, frameHeight: 32 },
+    );
+    this.load.spritesheet(
+      'owlet_monster_idle',
+      'src/assets/personajes/2 Owlet_Monster/Owlet_Monster_Idle_4.png',
+      { frameWidth: 32, frameHeight: 32 },
+    );
+    this.load.spritesheet(
+      'dude_monster_idle',
+      'src/assets/personajes/3 Dude_Monster/Dude_Monster_Idle_4.png',
+      { frameWidth: 32, frameHeight: 32 },
+    );
+
+    // Spritesheets Run para la pantalla de selección (6 frames de 32×32 cada uno).
+    this.load.spritesheet(
+      'pink_monster_run',
+      'src/assets/personajes/1 Pink_Monster/Pink_Monster_Run_6.png',
+      { frameWidth: 32, frameHeight: 32 },
+    );
+    this.load.spritesheet(
+      'owlet_monster_run',
+      'src/assets/personajes/2 Owlet_Monster/Owlet_Monster_Run_6.png',
+      { frameWidth: 32, frameHeight: 32 },
+    );
+    this.load.spritesheet(
+      'dude_monster_run',
+      'src/assets/personajes/3 Dude_Monster/Dude_Monster_Run_6.png',
+      { frameWidth: 32, frameHeight: 32 },
+    );
   }
 
   /**

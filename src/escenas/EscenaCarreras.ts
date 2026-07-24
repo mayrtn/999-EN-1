@@ -41,9 +41,11 @@ import type {
   TelemetriaRasgos,
   PerillasMutacion,
   InputUnificado,
+  IShell,
   DatosInicioEscena,
   IEscena,
 } from '../contrato';
+import { CLAVE_PERSONAJE } from './EscenaSeleccion';
 
 /**
  * Escena_Carreras: implementación **stub** conforme al Contrato_Compartido.
@@ -60,15 +62,19 @@ export class EscenaCarreras extends Phaser.Scene implements IEscena {
   /** Input unificado inyectado por el Shell (aún sin uso en el stub). */
   private entradaInput: InputUnificado | null = null;
 
+  /** Fachada del Shell inyectada en init(); permite redirigir si falta personaje. */
+  private shell: IShell | null = null;
+
   constructor() {
     super({ key: 'carreras' });
   }
 
   /**
    * Recibe los datos de inicio del Shell antes de `create()` (Requirement 8.4).
-   * Stub: sólo guarda el input; no hay estado de juego que reiniciar.
+   * Stub: sólo guarda el input y el shell; no hay estado de juego que reiniciar.
    */
   init(datos: DatosInicioEscena): void {
+    this.shell = datos?.shell ?? null;
     this.entradaInput = datos?.input ?? this.entradaInput;
   }
 
@@ -84,10 +90,22 @@ export class EscenaCarreras extends Phaser.Scene implements IEscena {
 
   /** Muestra un texto placeholder indicando que la escena está por llegar. */
   create(): void {
+    // Validación de personaje seleccionado (Requirements 4.3, 4.4).
+    const idPersonaje = this.game.registry.get(CLAVE_PERSONAJE) as string | null;
+    if (!idPersonaje || !['pink_monster', 'owlet_monster', 'dude_monster'].includes(idPersonaje)) {
+      if (this.shell) {
+        this.shell.solicitarTransicion('seleccion_personaje');
+      } else {
+        // eslint-disable-next-line no-console
+        console.warn('[EscenaCarreras] Sin personaje seleccionado y sin Shell: no se puede redirigir.');
+      }
+      return;
+    }
+
     const { width, height } = this.scale;
     this.add
       .text(width / 2, height / 2, 'Escena_Carreras (proximamente)', {
-        fontFamily: 'monospace',
+        fontFamily: 'PlanesValMore',
         fontSize: '20px',
         color: '#7cf9ff',
       })

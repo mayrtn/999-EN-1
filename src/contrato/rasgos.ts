@@ -15,7 +15,7 @@
  * `'carreras'` corresponde a la Escena_Carreras opcional, registrable sin
  * modificar el Shell ni el Motor_Scoring (Requirement 9.7).
  */
-export type EscenaId = 'plataformas' | 'ritmo' | 'shooter' | 'carreras';
+export type EscenaId = 'seleccion_personaje' | 'plataformas' | 'ritmo' | 'shooter' | 'carreras';
 
 /**
  * Los cuatro Rasgos que el Motor_Scoring mide y acumula por jugador

@@ -45,6 +45,7 @@ import {
   crearCapaClima,
   asegurarTexturaParticula,
 } from '../mutacion';
+import { CLAVE_PERSONAJE, PERSONAJES, type IdPersonaje } from './EscenaSeleccion';
 
 /** Id lógico de esta escena dentro del Contrato_Compartido. */
 const ID_ESCENA: EscenaId = 'plataformas';
@@ -180,6 +181,7 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
 
   // --- Objetos del mundo ---
   private jugador!: Phaser.Physics.Arcade.Sprite;
+  private jugadorUsaPlaceholder: boolean = true;
   private plataformas!: Phaser.Physics.Arcade.StaticGroup;
   private monedas!: Phaser.Physics.Arcade.Group;
   private enemigosGrupo!: Phaser.Physics.Arcade.Group;
@@ -259,6 +261,18 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
    * (Requirement 9.4). No usa assets de arte reales (Fase 1).
    */
   create(): void {
+    // Validación de personaje seleccionado (Requirements 4.3, 4.4).
+    const idPersonaje = this.game.registry.get(CLAVE_PERSONAJE) as string | null;
+    if (!idPersonaje || !['pink_monster', 'owlet_monster', 'dude_monster'].includes(idPersonaje)) {
+      if (this.shell) {
+        this.shell.solicitarTransicion('seleccion_personaje');
+      } else {
+        // eslint-disable-next-line no-console
+        console.warn('[NivelPlataformas] Sin personaje seleccionado y sin Shell: no se puede redirigir.');
+      }
+      return;
+    }
+
     this.generarTexturas();
 
     this.physics.world.setBounds(0, 0, ANCHO_MUNDO, ALTO_MUNDO);
@@ -337,9 +351,10 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
   aplicarPerillas(perillas: PerillasMutacion): void {
     this.perillas = perillas;
 
-    // Sprites tintables: jugador + enemigos + monedas (Requirement 7.1).
+    // Sprites tintables: enemigos + monedas siempre; jugador solo si usa
+    // placeholder (para no teñir el sprite pixel art del personaje seleccionado).
     const spritesTintables: Phaser.GameObjects.Sprite[] = [
-      this.jugador,
+      ...(this.jugadorUsaPlaceholder ? [this.jugador] : []),
       ...this.enemigos,
       ...(this.monedas.getChildren() as Phaser.GameObjects.Sprite[]),
     ];
@@ -430,7 +445,32 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
 
   /** Crea el jugador con física de arcade (gravedad, colisión con bordes). */
   private crearJugador(): void {
-    this.jugador = this.physics.add.sprite(this.spawnX, this.spawnY, TX.jugador);
+    const idPersonaje = this.game.registry.get(CLAVE_PERSONAJE) as IdPersonaje | null;
+    const datosPersonaje = PERSONAJES.find((p) => p.id === idPersonaje);
+
+    if (datosPersonaje && this.textures.exists(datosPersonaje.spriteKey)) {
+      // Usar el spritesheet del personaje seleccionado
+      this.jugadorUsaPlaceholder = false;
+      if (!this.anims.exists(datosPersonaje.animKey)) {
+        this.anims.create({
+          key: datosPersonaje.animKey,
+          frames: this.anims.generateFrameNumbers(datosPersonaje.spriteKey, {
+            start: 0,
+            end: 3,
+          }),
+          frameRate: 6,
+          repeat: -1,
+        });
+      }
+
+      this.jugador = this.physics.add.sprite(this.spawnX, this.spawnY, datosPersonaje.spriteKey);
+      this.jugador.setScale(2);
+      this.jugador.play(datosPersonaje.animKey);
+    } else {
+      // Fallback: placeholder rectangle
+      this.jugador = this.physics.add.sprite(this.spawnX, this.spawnY, TX.jugador);
+    }
+
     this.jugador.setCollideWorldBounds(true);
     this.jugador.setBounce(0);
   }
@@ -540,6 +580,13 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
 
     const dir = input.direccion();
     this.jugador.setVelocityX(dir.x * VELOCIDAD_JUGADOR);
+
+    // Voltear el sprite según la dirección de movimiento
+    if (dir.x < 0) {
+      this.jugador.setFlipX(true);
+    } else if (dir.x > 0) {
+      this.jugador.setFlipX(false);
+    }
 
     // Salto: sólo cuando el jugador está apoyado en el suelo/plataforma.
     if (input.accionPrimariaJustPressed() && cuerpo.blocked.down) {

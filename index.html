@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Arcade IA Mutante</title>
     <style>
+      @font-face {
+        font-family: 'PlanesValMore';
+        src: url('/src/assets/fonts/Planes_ValMore.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+        font-display: block;
+      }
       :root {
         color-scheme: dark;
       }
@@ -19,9 +26,7 @@
       #game-root {
         width: 100vw;
         height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        position: relative;
       }
       /* Pixel-art nitido para la estetica 8-bit (Requirement 11.3). */
       canvas {

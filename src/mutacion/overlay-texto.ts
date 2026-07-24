@@ -43,7 +43,7 @@ export interface OverlayTextoOpciones {
 
 /** Estilo 8-bit por defecto para el overlay. */
 const ESTILO_DEFAULT: Phaser.Types.GameObjects.Text.TextStyle = {
-  fontFamily: 'monospace',
+  fontFamily: 'PlanesValMore',
   fontSize: '20px',
   color: '#ffffff',
   align: 'center',
