@@ -293,20 +293,16 @@ export class EscenaSeleccion extends Phaser.Scene {
     // Persistir el IdPersonaje seleccionado en el registro de sesión
     this.game.registry.set(CLAVE_PERSONAJE, PERSONAJES[this.indiceActual]!.id);
 
-    // Obtener el sprite seleccionado y reproducir animación de escala
+    // Flash blanco breve como feedback de confirmación
     const selectedSprite = this.sprites[this.indiceActual]!;
-    this.tweens.add({
-      targets: selectedSprite,
-      scaleX: selectedSprite.scaleX * 1.3,
-      scaleY: selectedSprite.scaleY * 1.3,
-      duration: 300,
-      onComplete: () => {
-        // Al completar la animación, solicitar transición al primer nivel
-        const sceneManager = this.game.registry.get('sceneManager');
-        if (sceneManager && typeof sceneManager.solicitarTransicion === 'function') {
-          sceneManager.solicitarTransicion('plataformas');
-        }
-      },
+    selectedSprite.setTintFill(0xffffff);
+    this.time.delayedCall(150, () => {
+      selectedSprite.clearTint();
+      // Transición al primer nivel tras el flash
+      const sceneManager = this.game.registry.get('sceneManager');
+      if (sceneManager && typeof sceneManager.solicitarTransicion === 'function') {
+        sceneManager.solicitarTransicion('plataformas');
+      }
     });
   }
 }

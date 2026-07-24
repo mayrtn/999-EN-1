@@ -120,14 +120,14 @@ const PLATAFORMAS: readonly RectPlataforma[] = [
 
 /** Monedas coleccionables (rasgo `logro`, Requirement 1.4). */
 const MONEDAS: readonly { x: number; y: number }[] = [
-  { x: 360, y: 360 },
-  { x: 640, y: 280 },
-  { x: 900, y: 210 },
-  { x: 1180, y: 320 },
-  { x: 1500, y: 240 },
-  { x: 200, y: 480 },
-  { x: 800, y: 480 },
-  { x: 1300, y: 480 },
+  { x: 320, y: 360 },
+  { x: 600, y: 280 },
+  { x: 860, y: 210 },
+  { x: 1140, y: 320 },
+  { x: 1460, y: 240 },
+  { x: 150, y: 480 },
+  { x: 750, y: 480 },
+  { x: 1250, y: 480 },
 ];
 
 /** Enemigos hostiles (rasgo `furia` al derrotarlos, Requirement 1.5). */
@@ -140,9 +140,9 @@ const ENEMIGOS: readonly { x: number; y: number }[] = [
 
 /** Puntos de exploración ocultos/apartados (rasgo `curiosidad`). */
 const PUNTOS_EXPLORACION: readonly { x: number; y: number }[] = [
-  { x: 1750, y: 100 },
-  { x: 60, y: 120 },
-  { x: 940, y: 200 },
+  { x: 1780, y: 80 },
+  { x: 40, y: 80 },
+  { x: 940, y: 160 },
 ];
 
 /**
@@ -248,12 +248,24 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
   }
 
   /**
-   * Precarga de assets. En Fase 1 no se cargan assets de arte: todas las
-   * texturas se generan en runtime dentro de `create()` (programmer art). Se
-   * mantiene por el contrato {@link IEscena} y para futuros assets CC0 (Fase 3).
+   * Precarga de assets reales.
    */
   preload(): void {
-    // Sin assets externos en Fase 1.
+    // Background layers (parallax)
+    this.load.image('bg_layer0', 'src/assets/plataformas/PNG/Background/Crystal_Caves_Forest_2D_Platformer_Tileset_Background - Layer 00.png');
+    this.load.image('bg_layer1', 'src/assets/plataformas/PNG/Background/Crystal_Caves_Forest_2D_Platformer_Tileset_Background - Layer 01.png');
+    // Plataformas: Ground 02 para suelo, Ground 10/11/12 para flotantes (bordes + centro)
+    this.load.image('plat_ground', 'src/assets/plataformas/PNG/Platfromer/Crystal_Caves_Forest_2D_Platformer_Tileset_Platformer - Ground 02.png');
+    this.load.image('plat_float_center', 'src/assets/plataformas/PNG/Platfromer/Crystal_Caves_Forest_2D_Platformer_Tileset_Platformer - Ground 11.png');
+    this.load.image('plat_float_left', 'src/assets/plataformas/PNG/Platfromer/Crystal_Caves_Forest_2D_Platformer_Tileset_Platformer - Ground 10.png');
+    this.load.image('plat_float_right', 'src/assets/plataformas/PNG/Platfromer/Crystal_Caves_Forest_2D_Platformer_Tileset_Platformer - Ground 12.png');
+    // Moneda animada (spritesheet 16x16)
+    this.load.spritesheet('coin_gold', 'src/assets/items/coinGold.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    // Collectible de exploración: Life
+    this.load.image('star_collect', 'src/assets/plataformas/PNG/Collectable Object/Crystal_Caves_Forest_2D_Platformer_Tileset_Collectable Object - Life.png');
   }
 
   /**
@@ -278,6 +290,17 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     this.physics.world.setBounds(0, 0, ANCHO_MUNDO, ALTO_MUNDO);
     this.cameras.main.setBounds(0, 0, ANCHO_MUNDO, ALTO_MUNDO);
     this.cameras.main.setBackgroundColor('#12101c');
+
+    // Background parallax (Layer 00 = fondo lejano, Layer 01 = cercano)
+    const bg0 = this.add.tileSprite(0, 0, ANCHO_MUNDO, ALTO_MUNDO, 'bg_layer0');
+    bg0.setOrigin(0, 0);
+    bg0.setScrollFactor(0);
+    bg0.setDepth(-10);
+
+    const bg1 = this.add.tileSprite(0, 0, ANCHO_MUNDO, ALTO_MUNDO, 'bg_layer1');
+    bg1.setOrigin(0, 0);
+    bg1.setScrollFactor(0.3);
+    bg1.setDepth(-9);
 
     this.crearPlataformas();
     this.crearJugador();
@@ -309,6 +332,8 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
    * patrulla enemigos y mide el rasgo de riesgo por cercanía a enemigos vivos.
    */
   override update(_tiempo: number, deltaMs: number): void {
+    if (!this.jugador || !this.jugador.body) return;
+
     const input = this.entrada;
     if (!input) return;
 
@@ -351,12 +376,11 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
   aplicarPerillas(perillas: PerillasMutacion): void {
     this.perillas = perillas;
 
-    // Sprites tintables: enemigos + monedas siempre; jugador solo si usa
-    // placeholder (para no teñir el sprite pixel art del personaje seleccionado).
+    // Sprites tintables: enemigos siempre; jugador solo si usa placeholder.
+    // Las monedas usan sprite real con colores propios, no se tintan.
     const spritesTintables: Phaser.GameObjects.Sprite[] = [
       ...(this.jugadorUsaPlaceholder ? [this.jugador] : []),
       ...this.enemigos,
-      ...(this.monedas.getChildren() as Phaser.GameObjects.Sprite[]),
     ];
 
     // Capa de clima; si es 'ninguno' se crea un emisor placeholder detenido para
@@ -399,13 +423,10 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
   // Construcción del mundo (programmer art)
   // =========================================================================
 
-  /** Genera las texturas placeholder (rectángulos/círculos) en runtime. */
+  /** Genera las texturas placeholder restantes en runtime (solo jugador y enemigos). */
   private generarTexturas(): void {
     this.generarRect(TX.jugador, 28, 36, COLOR.jugador);
-    this.generarRect(TX.suelo, 32, 32, COLOR.suelo);
     this.generarRect(TX.enemigo, 30, 28, COLOR.enemigo);
-    this.generarCirculo(TX.moneda, 16, COLOR.moneda);
-    this.generarCirculo(TX.exploracion, 14, COLOR.exploracion);
   }
 
   /** Crea una textura rectangular sólida si aún no existe. */
@@ -429,18 +450,48 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     g.destroy();
   }
 
-  /** Crea el suelo y las plataformas como cuerpos estáticos. */
+  /** Crea el suelo y las plataformas con tiles escalados del pack. */
   private crearPlataformas(): void {
     this.plataformas = this.physics.add.staticGroup();
-    for (const p of PLATAFORMAS) {
-      const sprite = this.plataformas.create(
-        p.x,
-        p.y,
-        TX.suelo
-      ) as Phaser.Physics.Arcade.Sprite;
-      sprite.setDisplaySize(p.ancho, p.alto);
-      sprite.refreshBody();
-    }
+    const tileSize = 32;
+
+    PLATAFORMAS.forEach((p, index) => {
+      if (index === 0) {
+        // Suelo principal: repetir Ground 02
+        const cantidadX = Math.ceil(p.ancho / tileSize);
+        const cantidadY = Math.ceil(p.alto / tileSize);
+        for (let tx = 0; tx < cantidadX; tx++) {
+          for (let ty = 0; ty < cantidadY; ty++) {
+            const posX = (p.x - p.ancho / 2) + tx * tileSize + tileSize / 2;
+            const posY = (p.y - p.alto / 2) + ty * tileSize + tileSize / 2;
+            const sprite = this.plataformas.create(posX, posY, 'plat_ground') as Phaser.Physics.Arcade.Sprite;
+            sprite.setDisplaySize(tileSize, tileSize);
+            sprite.refreshBody();
+          }
+        }
+      } else {
+        // Plataformas flotantes: borde izq + centro repetido + borde der
+        const cantidadX = Math.max(3, Math.ceil(p.ancho / tileSize));
+        const startX = p.x - (cantidadX * tileSize) / 2 + tileSize / 2;
+
+        for (let tx = 0; tx < cantidadX; tx++) {
+          const posX = startX + tx * tileSize;
+          let textureKey: string;
+
+          if (tx === 0) {
+            textureKey = 'plat_float_left';
+          } else if (tx === cantidadX - 1) {
+            textureKey = 'plat_float_right';
+          } else {
+            textureKey = 'plat_float_center';
+          }
+
+          const sprite = this.plataformas.create(posX, p.y, textureKey) as Phaser.Physics.Arcade.Sprite;
+          sprite.setDisplaySize(tileSize, tileSize);
+          sprite.refreshBody();
+        }
+      }
+    });
   }
 
   /** Crea el jugador con física de arcade (gravedad, colisión con bordes). */
@@ -475,15 +526,30 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     this.jugador.setBounce(0);
   }
 
-  /** Crea el grupo de monedas (Requirement 1.4). */
+  /** Crea el grupo de monedas animadas (Requirement 1.4). */
   private crearMonedas(): void {
+    if (!this.anims.exists('coin_spin')) {
+      const frames = this.anims.generateFrameNumbers('coin_gold', {
+        start: 0,
+        end: -1,
+      });
+      this.anims.create({
+        key: 'coin_spin',
+        frames,
+        frameRate: 8,
+        repeat: -1,
+      });
+    }
+
     this.monedas = this.physics.add.group({ allowGravity: false, immovable: true });
     for (const m of MONEDAS) {
       const moneda = this.monedas.create(
         m.x,
         m.y,
-        TX.moneda
+        'coin_gold'
       ) as Phaser.Physics.Arcade.Sprite;
+      moneda.setScale(2);
+      moneda.play('coin_spin');
       moneda.setCircle(8);
     }
   }
@@ -505,21 +571,24 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     }
   }
 
-  /** Crea los puntos de exploración ocultos (rasgo `curiosidad`). */
+  /** Crea los puntos de exploración con estrellas (rasgo `curiosidad`). */
   private crearPuntosExploracion(): void {
     this.exploracionGrupo = this.physics.add.group({
       allowGravity: false,
       immovable: true,
     });
     for (const punto of PUNTOS_EXPLORACION) {
-      this.exploracionGrupo.create(punto.x, punto.y, TX.exploracion);
+      const estrella = this.exploracionGrupo.create(
+        punto.x,
+        punto.y,
+        'star_collect'
+      ) as Phaser.Physics.Arcade.Sprite;
+      estrella.setScale(0.35);
     }
   }
 
   /**
    * Crea al menos dos accesos ocultos en zonas secretas (Requirements 1.6, 1.7).
-   * Cada uno es una zona con cuerpo estático que, al ser tocada, solicita una
-   * transición distinta al Shell.
    */
   private crearAccesosOcultos(): void {
     for (const a of ACCESOS) {
@@ -586,6 +655,15 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
       this.jugador.setFlipX(true);
     } else if (dir.x > 0) {
       this.jugador.setFlipX(false);
+    }
+
+    // Animación: solo reproducir cuando se mueve, pausar cuando está quieto
+    if (!this.jugadorUsaPlaceholder) {
+      if (dir.x !== 0) {
+        this.jugador.anims.resume();
+      } else {
+        this.jugador.anims.pause();
+      }
     }
 
     // Salto: sólo cuando el jugador está apoyado en el suelo/plataforma.
