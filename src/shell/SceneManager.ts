@@ -66,8 +66,8 @@ import {
   type RegistroEscena,
 } from './registroEscenas';
 
-/** Primera Escena jugable que se carga al arrancar (Requirement 1.1). */
-export const PRIMERA_ESCENA: EscenaId = 'plataformas';
+/** Primera Escena jugable que se carga al arrancar (Requirement 6.2). */
+export const PRIMERA_ESCENA: EscenaId = 'seleccion_personaje';
 
 /** Clave bajo la que se publica el {@link SceneManager} en el registro global. */
 export const CLAVE_SCENE_MANAGER = 'sceneManager';

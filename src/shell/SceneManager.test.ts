@@ -130,6 +130,7 @@ function crearSesionDoble(): IAlmacenSesion {
 
 /** Registro de prueba con `carreras` deshabilitada (como hará la tarea 11.5). */
 const REGISTRO_PRUEBA: RegistroEscena[] = [
+  { id: 'seleccion_personaje', crear: () => crearEscenaDoble('seleccion_personaje'), habilitada: true },
   { id: 'plataformas', crear: () => crearEscenaDoble('plataformas'), habilitada: true },
   { id: 'ritmo', crear: () => crearEscenaDoble('ritmo'), habilitada: true },
   { id: 'shooter', crear: () => crearEscenaDoble('shooter'), habilitada: true },
@@ -183,7 +184,7 @@ describe('SceneManager — registro declarativo (Requirement 9.7)', () => {
 
   it('expone las Escenas habilitadas sin incluir las deshabilitadas', () => {
     const { sm } = crearSceneManager();
-    expect(sm.escenasHabilitadas()).toEqual(['plataformas', 'ritmo', 'shooter']);
+    expect(sm.escenasHabilitadas()).toEqual(['seleccion_personaje', 'plataformas', 'ritmo', 'shooter']);
   });
 });
 
@@ -211,8 +212,8 @@ describe('SceneManager — arranque (Requirements 1.1, 8.4)', () => {
     sm.registrarEscenas();
     await sm.iniciar();
 
-    const plataformas = escenas.get('plataformas');
-    expect(plataformas?.setInput).toHaveBeenCalledWith(inputDoble);
+    const seleccion = escenas.get('seleccion_personaje');
+    expect(seleccion?.setInput).toHaveBeenCalledWith(inputDoble);
   });
 });
 
@@ -220,7 +221,7 @@ describe('SceneManager — transiciones (Requirements 8.2, 8.4, 8.5)', () => {
   it('muestra la carga, detiene la Escena actual y arranca el destino con perillas', async () => {
     const { sm, gestor, llamadas } = crearSceneManager();
     sm.registrarEscenas();
-    await sm.iniciar(); // deja 'plataformas' como escena actual
+    await sm.iniciar(); // deja 'seleccion_personaje' como escena actual
 
     // Una Escena solicita ir a 'ritmo' (acceso oculto).
     sm.solicitarTransicion('ritmo');
@@ -230,7 +231,7 @@ describe('SceneManager — transiciones (Requirements 8.2, 8.4, 8.5)', () => {
     );
     void gestor;
 
-    const idxStop = llamadas.findIndex((l) => l.metodo === 'stop' && l.clave === 'plataformas');
+    const idxStop = llamadas.findIndex((l) => l.metodo === 'stop' && l.clave === 'seleccion_personaje');
     const idxCarga = llamadas.findIndex((l) => l.metodo === 'start' && l.clave === ID_CARGA);
     const idxDestino = llamadas.findIndex((l) => l.metodo === 'start' && l.clave === 'ritmo');
 
@@ -251,6 +252,12 @@ describe('SceneManager — transiciones (Requirements 8.2, 8.4, 8.5)', () => {
     const { sm, llamadas } = crearSceneManager();
     sm.registrarEscenas();
     await sm.iniciar();
+
+    // Ir a 'plataformas' primero (simula la transición desde selección de personaje).
+    sm.solicitarTransicion('plataformas');
+    await vi.waitFor(() =>
+      expect(llamadas.some((l) => l.metodo === 'start' && l.clave === 'plataformas')).toBe(true)
+    );
 
     // Ir a 'shooter' y luego solicitar retorno a 'plataformas'.
     sm.solicitarTransicion('shooter');

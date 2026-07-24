@@ -44,6 +44,7 @@ import {
   OverlayTextoPhaser,
   crearCapaClima,
 } from '../mutacion';
+import { CLAVE_PERSONAJE } from './EscenaSeleccion';
 
 /** Duración mínima de la sesión en ms (Requirement 2.1). */
 const DURACION_MIN_MS = 60000;
@@ -195,6 +196,18 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
    * mutación; luego aplica las Perillas_Mutacion recibidas (Requirements 2.5, 9.4).
    */
   create(): void {
+    // Validación de personaje seleccionado (Requirements 4.3, 4.4).
+    const idPersonaje = this.game.registry.get(CLAVE_PERSONAJE) as string | null;
+    if (!idPersonaje || !['pink_monster', 'owlet_monster', 'dude_monster'].includes(idPersonaje)) {
+      if (this.shell) {
+        this.shell.solicitarTransicion('seleccion_personaje');
+      } else {
+        // eslint-disable-next-line no-console
+        console.warn('[NivelRitmo] Sin personaje seleccionado y sin Shell: no se puede redirigir.');
+      }
+      return;
+    }
+
     this.asegurarTextura();
 
     const { width, height } = this.scale;
@@ -379,7 +392,7 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
   private crearHud(): void {
     this.hud = this.add
       .text(12, 12, '', {
-        fontFamily: 'monospace',
+        fontFamily: 'PlanesValMore',
         fontSize: '16px',
         color: '#7cf9ff',
       })

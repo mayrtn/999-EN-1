@@ -154,6 +154,7 @@ function crearSesionDoble(): IAlmacenSesion {
 
 /** Registro de prueba: plataformas + ritmo habilitadas (shooter también, útil). */
 const REGISTRO_PRUEBA: RegistroEscena[] = [
+  { id: 'seleccion_personaje', crear: () => crearEscenaDoble('seleccion_personaje'), habilitada: true },
   { id: 'plataformas', crear: () => crearEscenaDoble('plataformas'), habilitada: true },
   { id: 'ritmo', crear: () => crearEscenaDoble('ritmo'), habilitada: true },
   { id: 'shooter', crear: () => crearEscenaDoble('shooter'), habilitada: true },
@@ -294,13 +295,19 @@ describe('Shell loop — integración end-to-end (backend mockeado)', () => {
     const { sm, llamadas } = crearEntorno(fetchQueResponde(perillasRemotas));
     sm.registrarEscenas();
 
-    // Arranca la primera Escena (plataformas) con perillas resueltas y SIN carga
+    // Arranca la primera Escena (seleccion_personaje) con perillas resueltas y SIN carga
     // (el arranque inicial no es una transición solicitada, Requirement 8.2).
     await sm.iniciar();
-    expect(llamadas.some((l) => l.metodo === 'start' && l.clave === 'plataformas')).toBe(true);
+    expect(llamadas.some((l) => l.metodo === 'start' && l.clave === 'seleccion_personaje')).toBe(true);
     expect(
       llamadas.some((l) => l.metodo === 'start' && l.clave === ID_CARGA)
     ).toBe(false);
+
+    // Transición a plataformas (simula la confirmación de selección de personaje).
+    sm.solicitarTransicion('plataformas');
+    await vi.waitFor(() =>
+      expect(llamadas.some((l) => l.metodo === 'start' && l.clave === 'plataformas')).toBe(true)
+    );
 
     // La escena "termina": reporta su telemetría y solicita transición a ritmo.
     sm.reportarTelemetria(telemetriaConSenal('plataformas'));
@@ -321,9 +328,10 @@ describe('Shell loop — integración end-to-end (backend mockeado)', () => {
 
     // (Req 8.2) Se mostró la pantalla de carga y luego se ocultó, en orden:
     // detener actual → mostrar carga → arrancar destino.
+    // We search after the plataformas stop to find the loading screen for the ritmo transition.
     const idxStop = llamadas.findIndex((l) => l.metodo === 'stop' && l.clave === 'plataformas');
-    const idxCargaOn = llamadas.findIndex((l) => l.metodo === 'start' && l.clave === ID_CARGA);
-    const idxCargaOff = llamadas.findIndex((l) => l.metodo === 'stop' && l.clave === ID_CARGA);
+    const idxCargaOn = llamadas.findIndex((l, i) => i > idxStop && l.metodo === 'start' && l.clave === ID_CARGA);
+    const idxCargaOff = llamadas.findIndex((l, i) => i > idxStop && l.metodo === 'stop' && l.clave === ID_CARGA);
     const idxDestino = llamadas.findIndex((l) => l.metodo === 'start' && l.clave === 'ritmo');
     expect(idxStop).toBeGreaterThanOrEqual(0);
     expect(idxCargaOn).toBeGreaterThan(idxStop);
@@ -342,6 +350,12 @@ describe('Shell loop — integración end-to-end (backend mockeado)', () => {
     const { sm, llamadas } = crearEntorno(fetchQueRechaza());
     sm.registrarEscenas();
     await sm.iniciar();
+
+    // Transición a plataformas (simula la confirmación de selección de personaje).
+    sm.solicitarTransicion('plataformas');
+    await vi.waitFor(() =>
+      expect(llamadas.some((l) => l.metodo === 'start' && l.clave === 'plataformas')).toBe(true)
+    );
 
     sm.reportarTelemetria(telemetriaConSenal('plataformas'));
     sm.solicitarTransicion('ritmo');
@@ -367,6 +381,12 @@ describe('Shell loop — integración end-to-end (backend mockeado)', () => {
     sm.registrarEscenas();
     await sm.iniciar();
 
+    // Transición a plataformas (simula la confirmación de selección de personaje).
+    sm.solicitarTransicion('plataformas');
+    await vi.waitFor(() =>
+      expect(llamadas.some((l) => l.metodo === 'start' && l.clave === 'plataformas')).toBe(true)
+    );
+
     sm.reportarTelemetria(telemetriaConSenal('plataformas'));
     sm.solicitarTransicion('ritmo');
 
@@ -386,6 +406,12 @@ describe('Shell loop — integración end-to-end (backend mockeado)', () => {
     const { sm, llamadas } = crearEntorno(fetchQueResponde(perillasRemotas));
     sm.registrarEscenas();
     await sm.iniciar();
+
+    // Transición a plataformas (simula la confirmación de selección de personaje).
+    sm.solicitarTransicion('plataformas');
+    await vi.waitFor(() =>
+      expect(llamadas.some((l) => l.metodo === 'start' && l.clave === 'plataformas')).toBe(true)
+    );
 
     // Entra al nivel oculto 'ritmo'.
     sm.reportarTelemetria(telemetriaConSenal('plataformas'));

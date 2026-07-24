@@ -40,6 +40,7 @@ import {
   crearCapaClima,
   asegurarTexturaParticula,
 } from '../mutacion';
+import { CLAVE_PERSONAJE } from './EscenaSeleccion';
 
 /** Duración mínima de la sesión (Requirement 3.1), en milisegundos. */
 const DURACION_MIN_MS = 60_000;
@@ -210,6 +211,18 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
    * (Requirements 3.1, 3.5, 3.6).
    */
   create(): void {
+    // Validación de personaje seleccionado (Requirements 4.3, 4.4).
+    const idPersonaje = this.game.registry.get(CLAVE_PERSONAJE) as string | null;
+    if (!idPersonaje || !['pink_monster', 'owlet_monster', 'dude_monster'].includes(idPersonaje)) {
+      if (this.shell) {
+        this.shell.solicitarTransicion('seleccion_personaje');
+      } else {
+        // eslint-disable-next-line no-console
+        console.warn('[NivelShooter] Sin personaje seleccionado y sin Shell: no se puede redirigir.');
+      }
+      return;
+    }
+
     const { width, height } = this.scale;
 
     this.cameras.main.setBackgroundColor('#141422');
