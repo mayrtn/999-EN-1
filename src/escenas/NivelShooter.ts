@@ -54,8 +54,8 @@ const VELOCIDAD_MIRA = 420;
 
 /** Lado del objetivo cuadrado placeholder, en píxeles. */
 const LADO_OBJETIVO = 40;
-/** Lado de la textura de mira placeholder, en píxeles. */
-const LADO_MIRA = 36;
+/** Lado de la textura de mira placeholder (legacy, se usa 48 directo). */
+// const LADO_MIRA = 36;
 
 /** Keys de texturas placeholder generadas en runtime. */
 const KEY_TEX_OBJETIVO = 'shooter_objetivo';
@@ -86,6 +86,8 @@ interface ObjetivoActivo {
   velocidadX: number;
   /** Marca de tiempo de aparición (para medir quick-draw / riesgo). */
   aparicionMs: number;
+  /** Si es true, dispararle penaliza (bomba). */
+  esBomba: boolean;
 }
 
 /**
@@ -146,6 +148,7 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
   private timerFin?: Phaser.Time.TimerEvent;
   /** Marca de que la sesión ya finalizó (evita reentradas). */
   private terminado = false;
+  private esperandoInicio = true;
 
   // --- Señales acumuladas para la telemetría (Requirements 3.7, 9.1) ---
   /** Total de objetivos que aparecieron (oportunidad de furia). */
@@ -158,6 +161,8 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
   private impactos = 0;
   /** Impactos "quick-draw" logrados poco después de aparecer (señal de riesgo). */
   private impactosRapidos = 0;
+  /** Bombas impactadas (penalización). */
+  private bombasImpactadas = 0;
 
   /**
    * @param opciones Ajustes opcionales (duración de sesión).
@@ -197,12 +202,37 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
   }
 
   /**
-   * Genera las texturas placeholder (Fase 1): un objetivo cuadrado y una mira en
-   * cruz. No se cargan assets reales.
+   * Genera las texturas placeholder (Fase 1) y carga assets reales del pack
+   * Space Shooter si están disponibles.
    */
   preload(): void {
     this.generarTexturaObjetivo();
     this.generarTexturaMira();
+
+    // Cargar assets reales del pack Space Shooter.
+    // Cargar aliens como spritesheets animados (tiras de 256x16, frames de 16x16).
+    const alienKeys = ['alien_1', 'alien_2', 'alien_3', 'alien_4'];
+    const alienPaths = [
+      'src/assets/items/Aliens/Aliens1.png',
+      'src/assets/items/Aliens/Aliens2.png',
+      'src/assets/items/Aliens/Aliens3.png',
+      'src/assets/items/Aliens/Aliens4.png',
+    ];
+    for (let i = 0; i < alienKeys.length; i++) {
+      const k = alienKeys[i] as string;
+      const p = alienPaths[i] as string;
+      if (!this.textures.exists(k)) {
+        this.load.spritesheet(k, p, { frameWidth: 32, frameHeight: 16 });
+      }
+    }
+
+    // Cargar dinamita como spritesheet animado (3x3, 32x32 por frame).
+    if (!this.textures.exists('dinamita')) {
+      this.load.spritesheet('dinamita', 'src/assets/items/dynamite.png', {
+        frameWidth: 32,
+        frameHeight: 32,
+      });
+    }
   }
 
   /**
@@ -225,12 +255,19 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
 
     const { width, height } = this.scale;
 
-    this.cameras.main.setBackgroundColor('#141422');
+    this.cameras.main.setBackgroundColor('#181840');
 
-    // Mira centrada al inicio (Requirement 3.2).
+    // === DECORACIÓN DE FONDO ===
+    this.crearFondoEspacial(width, height);
+    this.crearDecoracionShooter(width, height);
+    this.crearHudShooter(width);
+    this.crearPersonajeDecorativoShooter();
+
+    // Mira centrada al inicio — oculta hasta que arranque el juego.
     this.mira = this.add
       .sprite(width / 2, height / 2, KEY_TEX_MIRA)
-      .setDepth(PROFUNDIDAD_MIRA);
+      .setDepth(PROFUNDIDAD_MIRA)
+      .setVisible(false);
 
     // Colaboradores de mutación (Requirement 7).
     this.gestorAudio = new GestorAudioPhaser(this);
@@ -241,11 +278,255 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
       this.aplicarPerillas(this.perillas);
     }
 
-    // Temporizador de aparición de objetivos, según intensidad.
-    this.programarSpawn();
+    // Esperar mostrando instrucciones antes de arrancar.
+    this.esperandoInicio = true;
+    this.time.delayedCall(5000, () => {
+      this.esperandoInicio = false;
+      if (this.mira) this.mira.setVisible(true);
+      // Temporizador de aparición de objetivos, según intensidad.
+      this.programarSpawn();
+      // Fin de sesión tras la duración configurada (Requirements 3.1, 3.5).
+      this.timerFin = this.time.delayedCall(this.duracionMs, () => this.finalizar());
+    });
+  }
 
-    // Fin de sesión tras la duración configurada (Requirements 3.1, 3.5).
-    this.timerFin = this.time.delayedCall(this.duracionMs, () => this.finalizar());
+  // =========================================================================
+  // Decoración visual
+  // =========================================================================
+
+  /** Fondo con muchas estrellas, nebulosas y estrellas que parpadean. */
+  private crearFondoEspacial(width: number, height: number): void {
+    const bg = this.add.graphics().setDepth(-10);
+
+    // Muchas estrellas (120).
+    for (let i = 0; i < 120; i++) {
+      const x = Math.random() * width;
+      const y = Math.random() * height;
+      const size = Math.random() > 0.8 ? 2 : 1;
+      const alpha = 0.15 + Math.random() * 0.6;
+      const color = Math.random() > 0.6 ? 0xffffff : Math.random() > 0.5 ? 0x88ccff : 0xffcc88;
+      bg.fillStyle(color, alpha);
+      bg.fillRect(x, y, size, size);
+    }
+
+    // Nebulosas de color.
+    bg.fillStyle(0x2211aa, 0.05);
+    bg.fillCircle(width * 0.2, height * 0.3, 140);
+    bg.fillStyle(0xaa1144, 0.04);
+    bg.fillCircle(width * 0.75, height * 0.6, 110);
+    bg.fillStyle(0x115533, 0.03);
+    bg.fillCircle(width * 0.5, height * 0.8, 90);
+
+    // Estrellas que parpadean (tweens).
+    for (let i = 0; i < 8; i++) {
+      const star = this.add
+        .circle(
+          Phaser.Math.Between(20, width - 20),
+          Phaser.Math.Between(20, height - 20),
+          1.5,
+          0xffffff
+        )
+        .setAlpha(0.3)
+        .setDepth(-9);
+      this.tweens.add({
+        targets: star,
+        alpha: { from: 0.2, to: 0.9 },
+        duration: 600 + Math.random() * 800,
+        yoyo: true,
+        repeat: -1,
+        delay: Math.random() * 2000,
+      });
+    }
+
+    // Estrellas extra grandes que brillan más.
+    for (let i = 0; i < 5; i++) {
+      const bigStar = this.add.graphics().setDepth(-9);
+      const bx = Phaser.Math.Between(30, width - 30);
+      const by = Phaser.Math.Between(30, height - 30);
+      bigStar.fillStyle(0xffffff, 0.4);
+      bigStar.fillRect(bx, by, 3, 1);
+      bigStar.fillRect(bx + 1, by - 1, 1, 3);
+      this.tweens.add({
+        targets: bigStar,
+        alpha: { from: 0.2, to: 1 },
+        duration: 1000 + Math.random() * 1500,
+        yoyo: true,
+        repeat: -1,
+        delay: Math.random() * 3000,
+      });
+    }
+
+    // Planeta/luna decorativa lejana.
+    const planeta = this.add.graphics().setDepth(-9);
+    planeta.fillStyle(0x334466, 0.15);
+    planeta.fillCircle(width - 80, 100, 35);
+    planeta.fillStyle(0x445577, 0.1);
+    planeta.fillCircle(width - 75, 95, 28);
+  }
+
+  /** Decoración: marcos, título, instrucción, partículas ambientales. */
+  private crearDecoracionShooter(width: number, height: number): void {
+    this.add
+      .text(width / 2, 35, 'SHOOTER', {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '14px',
+        color: '#ff4444',
+        shadow: { offsetX: 0, offsetY: 0, color: '#ff4444', blur: 8, fill: true },
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(100)
+      .setAlpha(0.9);
+
+    // Instrucción centrada que se muestra antes de arrancar.
+    const instruccion = this.add
+      .text(width / 2, height / 2, 'LOS ALIENS CRUZAN LA PANTALLA\nMOVE LA MIRA CON LAS FLECHAS\nDISPARA CON ESPACIO\n\n¡EVITA LAS DINAMITAS!', {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '11px',
+        color: '#ffffff',
+        align: 'center',
+        lineSpacing: 10,
+        shadow: { offsetX: 0, offsetY: 0, color: '#ff4444', blur: 6, fill: true },
+      })
+      .setOrigin(0.5, 0.5)
+      .setDepth(101)
+      .setAlpha(1);
+
+    // Se desvanece cuando el juego arranca.
+    this.time.delayedCall(4500, () => {
+      this.tweens.add({
+        targets: instruccion,
+        alpha: 0,
+        duration: 400,
+        onComplete: () => instruccion.destroy(),
+      });
+    });
+
+    const marcos = this.add.graphics().setDepth(-5);
+    const len = 25;
+    marcos.lineStyle(2, 0xff4444, 0.4);
+    marcos.beginPath(); marcos.moveTo(10, 10 + len); marcos.lineTo(10, 10); marcos.lineTo(10 + len, 10); marcos.strokePath();
+    marcos.beginPath(); marcos.moveTo(width - 10 - len, 10); marcos.lineTo(width - 10, 10); marcos.lineTo(width - 10, 10 + len); marcos.strokePath();
+    marcos.beginPath(); marcos.moveTo(10, height - 10 - len); marcos.lineTo(10, height - 10); marcos.lineTo(10 + len, height - 10); marcos.strokePath();
+    marcos.beginPath(); marcos.moveTo(width - 10 - len, height - 10); marcos.lineTo(width - 10, height - 10); marcos.lineTo(width - 10, height - 10 - len); marcos.strokePath();
+
+    const keyPart = asegurarTexturaParticula(this);
+    this.add.particles(0, 0, keyPart, {
+      x: { min: 0, max: width },
+      y: { min: 0, max: height },
+      lifespan: 4000,
+      speed: { min: 5, max: 15 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 0.15, end: 0 },
+      alpha: { start: 0.3, end: 0 },
+      tint: 0x4488ff,
+      frequency: 400,
+      quantity: 1,
+    }).setDepth(-4);
+
+    const scan = this.add.graphics().setDepth(-3);
+    scan.lineStyle(1, 0xff4444, 0.06);
+    for (let y = 50; y < height - 50; y += 40) {
+      scan.beginPath();
+      scan.moveTo(0, y);
+      scan.lineTo(width, y);
+      scan.strokePath();
+    }
+    this.tweens.add({
+      targets: scan,
+      alpha: { from: 0.3, to: 0.8 },
+      duration: 2000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // Partículas extras — polvo rojo oscuro flotando.
+    this.add.particles(0, 0, keyPart, {
+      x: { min: 0, max: width },
+      y: { min: 0, max: height },
+      lifespan: 5000,
+      speed: { min: 3, max: 12 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 0.1, end: 0 },
+      alpha: { start: 0.2, end: 0 },
+      tint: 0xff4444,
+      frequency: 600,
+      quantity: 1,
+    }).setDepth(-4);
+
+    // Cometas/estrellas fugaces ocasionales (líneas que cruzan).
+    this.time.addEvent({
+      delay: 3000,
+      loop: true,
+      callback: () => {
+        const startX = Phaser.Math.Between(0, width);
+        const linea = this.add.graphics().setDepth(-8).setAlpha(0.6);
+        linea.lineStyle(1, 0xffffff, 0.8);
+        linea.beginPath();
+        linea.moveTo(startX, 0);
+        linea.lineTo(startX + 60, 40);
+        linea.strokePath();
+        this.tweens.add({
+          targets: linea,
+          alpha: 0,
+          x: 80,
+          y: 60,
+          duration: 600,
+          onComplete: () => linea.destroy(),
+        });
+      },
+    });
+
+    // Grid de puntos tenues en los bordes (tipo radar).
+    const grid = this.add.graphics().setDepth(-6);
+    grid.fillStyle(0xff4444, 0.1);
+    for (let gx = 20; gx < width; gx += 50) {
+      for (let gy = 20; gy < height; gy += 50) {
+        // Solo dibujar en los bordes (no en el centro donde van los aliens).
+        if (gx > 100 && gx < width - 100 && gy > 60 && gy < height - 60) continue;
+        grid.fillCircle(gx, gy, 1);
+      }
+    }
+  }
+
+  /** HUD con disparos, impactos y tiempo (lado derecho). */
+  private crearHudShooter(width: number): void {
+    const labelStyle = { fontFamily: '"Press Start 2P"', fontSize: '8px', color: '#ff4444' };
+    const valStyle = {
+      fontFamily: '"Press Start 2P"', fontSize: '13px', color: '#ffffff',
+      shadow: { offsetX: 0, offsetY: 0, color: '#ff4444', blur: 4, fill: true },
+    };
+    this.add.text(width - 140, 48, 'DISPAROS', labelStyle).setScrollFactor(0).setDepth(100);
+    this.add.text(width - 140, 60, '000', valStyle).setScrollFactor(0).setDepth(100).setName('hud_disparos');
+    this.add.text(width - 140, 88, 'IMPACTOS', labelStyle).setScrollFactor(0).setDepth(100);
+    this.add.text(width - 140, 100, '000', valStyle).setScrollFactor(0).setDepth(100).setName('hud_impactos');
+    this.add.text(width - 140, 128, 'DINAMITAS', labelStyle).setScrollFactor(0).setDepth(100);
+    this.add.text(width - 140, 140, '000', { fontFamily: '"Press Start 2P"', fontSize: '13px', color: '#ff4444', shadow: { offsetX: 0, offsetY: 0, color: '#ff0000', blur: 4, fill: true } }).setScrollFactor(0).setDepth(100).setName('hud_bombas');
+    this.add.text(width - 140, 168, 'TIEMPO', labelStyle).setScrollFactor(0).setDepth(100);
+    this.add.text(width - 140, 180, '01:15', valStyle).setScrollFactor(0).setDepth(100).setName('hud_tiempo');
+  }
+
+  /** Personaje decorativo en la esquina inferior izquierda. */
+  private crearPersonajeDecorativoShooter(): void {
+    const idPersonaje = this.game.registry.get(CLAVE_PERSONAJE) as string | null;
+    if (!idPersonaje) return;
+    const keyIdle = `${idPersonaje}_idle`;
+    if (!this.textures.exists(keyIdle)) return;
+    const animKey = `${idPersonaje}_idle_shooter`;
+    if (!this.anims.exists(animKey)) {
+      this.anims.create({
+        key: animKey,
+        frames: this.anims.generateFrameNumbers(keyIdle, { start: 0, end: 3 }),
+        frameRate: 6,
+        repeat: -1,
+      });
+    }
+    const personaje = this.add
+      .sprite(50, this.scale.height - 70, keyIdle)
+      .setScale(2)
+      .setAlpha(0.8)
+      .setDepth(5);
+    personaje.play(animKey);
   }
 
   /**
@@ -257,6 +538,7 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
    */
   override update(_tiempo: number, deltaMs: number): void {
     if (this.terminado) return;
+    if (this.esperandoInicio) return;
 
     // El input just-pressed exige actualizar una vez por frame (contrato de
     // InputTeclado). El método `update()` es propio del binding concreto y no
@@ -266,6 +548,26 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
     this.moverMira(deltaMs);
     this.procesarDisparo();
     this.moverObjetivos(deltaMs);
+    this.actualizarHudShooter();
+  }
+
+  /** Actualiza los valores del HUD del shooter. */
+  private actualizarHudShooter(): void {
+    const hudDisparos = this.children.getByName('hud_disparos') as Phaser.GameObjects.Text | null;
+    const hudImpactos = this.children.getByName('hud_impactos') as Phaser.GameObjects.Text | null;
+    const hudBombas = this.children.getByName('hud_bombas') as Phaser.GameObjects.Text | null;
+    const hudTiempo = this.children.getByName('hud_tiempo') as Phaser.GameObjects.Text | null;
+
+    if (hudDisparos) hudDisparos.setText(String(this.disparos).padStart(3, '0'));
+    if (hudImpactos) hudImpactos.setText(String(this.impactos).padStart(3, '0'));
+    if (hudBombas) hudBombas.setText(String(this.bombasImpactadas).padStart(3, '0'));
+    if (hudTiempo && this.timerFin) {
+      const restanteMs = Math.max(0, this.timerFin.getRemaining());
+      const s = Math.ceil(restanteMs / 1000);
+      const min = Math.floor(s / 60);
+      const sec = s % 60;
+      hudTiempo.setText(`${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`);
+    }
   }
 
   /**
@@ -351,12 +653,14 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
   /** Reinicia contadores y colecciones para una sesión limpia. */
   private reiniciarEstado(): void {
     this.terminado = false;
+    this.esperandoInicio = true;
     this.objetivos = [];
     this.totalObjetivos = 0;
     this.objetivosDestruidos = 0;
     this.disparos = 0;
     this.impactos = 0;
     this.impactosRapidos = 0;
+    this.bombasImpactadas = 0;
   }
 
   /**
@@ -402,6 +706,16 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
       const bounds = objetivo.sprite.getBounds();
       if (!bounds.contains(x, y)) continue;
 
+      if (objetivo.esBomba) {
+        // Penalización: flash rojo + shake fuerte + pierde impactos.
+        this.cameras.main.shake(200, 0.012);
+        this.cameras.main.flash(250, 255, 0, 0, false);
+        this.impactos = Math.max(0, this.impactos - 2);
+        this.bombasImpactadas += 1;
+        this.removerObjetivo(i);
+        return;
+      }
+
       // Impacto confirmado (Requirement 3.4).
       this.impactos += 1;
       this.objetivosDestruidos += 1;
@@ -440,12 +754,58 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
     }
   }
 
-  /** Retira el objetivo en el índice indicado y destruye su sprite. */
+  /** Retira el objetivo en el índice indicado, muestra explosión y destruye sprite. */
   private removerObjetivo(indice: number): void {
     const objetivo = this.objetivos[indice];
     if (!objetivo) return;
+
+    // Explosión de partículas en la posición del enemigo.
+    const ex = objetivo.sprite.x;
+    const ey = objetivo.sprite.y;
+    this.mostrarExplosion(ex, ey);
+
     objetivo.sprite.destroy();
     this.objetivos.splice(indice, 1);
+  }
+
+  /** Explosión visual exagerada al destruir un enemigo. */
+  private mostrarExplosion(x: number, y: number): void {
+    const keyPart = asegurarTexturaParticula(this);
+
+    // Burst principal — muchas partículas rápidas.
+    const emitter1 = this.add.particles(x, y, keyPart, {
+      speed: { min: 100, max: 300 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 0.8, end: 0 },
+      alpha: { start: 1, end: 0 },
+      tint: [0xff4444, 0xff8800, 0xffff00],
+      lifespan: 500,
+      quantity: 16,
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
+    });
+    emitter1.setDepth(PROFUNDIDAD_DISPARO);
+    emitter1.explode(16);
+    this.time.delayedCall(600, () => emitter1.destroy());
+
+    // Segundo burst — chispas blancas más lentas.
+    const emitter2 = this.add.particles(x, y, keyPart, {
+      speed: { min: 30, max: 80 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 0.4, end: 0 },
+      alpha: { start: 0.9, end: 0 },
+      tint: [0xffffff, 0xffccaa],
+      lifespan: 700,
+      quantity: 8,
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
+    });
+    emitter2.setDepth(PROFUNDIDAD_DISPARO);
+    emitter2.explode(8);
+    this.time.delayedCall(800, () => emitter2.destroy());
+
+    // Screen shake leve.
+    this.cameras.main.shake(80, 0.005);
   }
 
   /**
@@ -480,42 +840,116 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
     const { width, height } = this.scale;
     const desdeIzquierda = Math.random() < 0.5;
     const x = desdeIzquierda ? -LADO_OBJETIVO / 2 : width + LADO_OBJETIVO / 2;
-    const y = Phaser.Math.Between(LADO_OBJETIVO, height - LADO_OBJETIVO);
+    const y = Phaser.Math.Between(LADO_OBJETIVO + 50, height - LADO_OBJETIVO);
 
     const velocidad =
       VELOCIDAD_OBJETIVO_BASE *
       (1 + Phaser.Math.Clamp(this.agresividad, 0, 1) * 2) *
       (desdeIzquierda ? 1 : -1);
 
-    const sprite = this.add
-      .sprite(x, y, KEY_TEX_OBJETIVO)
-      .setDepth(PROFUNDIDAD_OBJETIVO);
+    // 15% de chance de ser bomba (dinamita).
+    const esBomba = Math.random() < 0.15;
 
-    // Mantiene el tinte de paleta activo, si ya se aplicaron perillas.
-    if (this.perillas) {
-      const color = this.mira?.tintTopLeft;
-      if (typeof color === 'number') sprite.setTint(color);
+    let sprite: Phaser.GameObjects.Sprite;
+
+    // Usar aliens animados si se cargaron.
+    const alienKeys = ['alien_1', 'alien_2', 'alien_3', 'alien_4'];
+    const cargados = alienKeys.filter(k => this.textures.exists(k));
+
+    if (cargados.length > 0 && !esBomba) {
+      const key = cargados[Phaser.Math.Between(0, cargados.length - 1)] as string;
+      const animKey = `${key}_anim`;
+      if (!this.anims.exists(animKey)) {
+        const totalFrames = this.textures.get(key).frameTotal - 1;
+        this.anims.create({
+          key: animKey,
+          frames: this.anims.generateFrameNumbers(key, { start: 0, end: Math.max(0, totalFrames - 1) }),
+          frameRate: 8,
+          repeat: -1,
+        });
+      }
+      sprite = this.add
+        .sprite(x, y, key)
+        .setDisplaySize(LADO_OBJETIVO + 8, LADO_OBJETIVO + 8)
+        .setDepth(PROFUNDIDAD_OBJETIVO);
+      sprite.play(animKey);
+    } else {
+      // Bomba o fallback.
+      if (esBomba && this.textures.exists('dinamita')) {
+        // Crear animación de dinamita si no existe.
+        if (!this.anims.exists('dinamita_anim')) {
+          this.anims.create({
+            key: 'dinamita_anim',
+            frames: this.anims.generateFrameNumbers('dinamita', { start: 0, end: 8 }),
+            frameRate: 10,
+            repeat: -1,
+          });
+        }
+        sprite = this.add
+          .sprite(x, y, 'dinamita')
+          .setDisplaySize(LADO_OBJETIVO + 16, LADO_OBJETIVO + 16)
+          .setDepth(PROFUNDIDAD_OBJETIVO);
+        sprite.play('dinamita_anim');
+      } else {
+        sprite = this.add
+          .sprite(x, y, KEY_TEX_OBJETIVO)
+          .setDepth(PROFUNDIDAD_OBJETIVO);
+        if (esBomba) {
+          sprite.setTint(0xff2222);
+          sprite.setDisplaySize(LADO_OBJETIVO - 6, LADO_OBJETIVO - 6);
+        }
+      }
+      if (esBomba) {
+        // Pulso para que se note que es peligrosa.
+        this.tweens.add({
+          targets: sprite,
+          alpha: { from: 1, to: 0.5 },
+          duration: 200,
+          yoyo: true,
+          repeat: -1,
+        });
+      }
     }
+
+    // Flip si viene de la derecha.
+    if (!desdeIzquierda) sprite.setFlipX(true);
 
     this.objetivos.push({
       sprite,
       velocidadX: velocidad,
       aparicionMs: this.time.now,
+      esBomba,
     });
     this.totalObjetivos += 1;
   }
 
-  /** Muestra un destello temporal en la posición del disparo (feedback visual). */
+  /** Muestra un destello de disparo + efecto de retroceso en la mira. */
   private mostrarDestelloDisparo(x: number, y: number): void {
+    // Destello principal.
     const destello = this.add
-      .circle(x, y, 6, 0xfff27a)
-      .setDepth(PROFUNDIDAD_DISPARO);
+      .circle(x, y, 8, 0xfff27a)
+      .setDepth(PROFUNDIDAD_DISPARO)
+      .setBlendMode(Phaser.BlendModes.ADD);
     this.tweens.add({
       targets: destello,
       alpha: 0,
-      scale: 2,
-      duration: 160,
+      scale: 2.5,
+      duration: 180,
       onComplete: () => destello.destroy(),
+    });
+
+    // Anillo de onda expansiva.
+    const anillo = this.add
+      .circle(x, y, 4, 0xffffff, 0)
+      .setStrokeStyle(2, 0xfff27a, 0.8)
+      .setDepth(PROFUNDIDAD_DISPARO)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({
+      targets: anillo,
+      scale: 3,
+      alpha: 0,
+      duration: 250,
+      onComplete: () => anillo.destroy(),
     });
   }
 
@@ -598,13 +1032,30 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
   /** Genera la textura placeholder de la mira (cruz + anillo). */
   private generarTexturaMira(): void {
     if (this.textures.exists(KEY_TEX_MIRA)) return;
+    const size = 40;
+    const c = size / 2;
     const g = this.make.graphics({ x: 0, y: 0 }, false);
-    const c = LADO_MIRA / 2;
+
+    // Anillo exterior brillante blanco/cyan.
+    g.lineStyle(3, 0x00ffff, 1);
+    g.strokeCircle(c, c, c - 4);
+
+    // Cruz gruesa con gap central.
     g.lineStyle(2, 0xffffff, 1);
-    g.strokeCircle(c, c, c - 2);
-    g.lineBetween(c, 0, c, LADO_MIRA);
-    g.lineBetween(0, c, LADO_MIRA, c);
-    g.generateTexture(KEY_TEX_MIRA, LADO_MIRA, LADO_MIRA);
+    // Arriba
+    g.lineBetween(c, 2, c, c - 10);
+    // Abajo
+    g.lineBetween(c, c + 10, c, size - 2);
+    // Izquierda
+    g.lineBetween(2, c, c - 10, c);
+    // Derecha
+    g.lineBetween(c + 10, c, size - 2, c);
+
+    // Punto central brillante.
+    g.fillStyle(0x00ffff, 1);
+    g.fillCircle(c, c, 3);
+
+    g.generateTexture(KEY_TEX_MIRA, size, size);
     g.destroy();
   }
 }

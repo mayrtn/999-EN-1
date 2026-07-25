@@ -20,8 +20,9 @@
  *   `create()` vía el {@link SistemaMutacion}.
  * - **Requirements 2.6, 9.1**: emite la Telemetria_Rasgos al terminar.
  *
- * Fase 1 — arte placeholder: todos los objetos visuales se generan en runtime a
- * partir de una textura blanca mínima (sin assets reales).
+ * Fase 2 — arte real: las notas se renderizan usando el spritesheet
+ * `Music-Notes.png` (grilla 3x3 de notas musicales pixel art). La línea de
+ * acierto mantiene una textura generada en runtime como fallback.
  *
  * @module escenas/NivelRitmo
  */
@@ -84,8 +85,24 @@ const PERILLAS_DEFECTO: PerillasMutacion = {
   mensaje: '',
 };
 
-/** Key de la textura blanca placeholder generada en runtime (Fase 1). */
+/** Key de la textura blanca placeholder para la línea de acierto. */
 const KEY_TEXTURA = 'ritmo_px';
+/** Key del spritesheet de notas musicales (legacy — ya no se usa). */
+// const KEY_NOTAS = 'ritmo_notas';
+/** Keys de las notas individuales. */
+const NOTAS_KEYS: string[] = [
+  'nota_1', 'nota_2', 'nota_3', 'nota_4', 'nota_5', 'nota_6', 'nota_7',
+];
+/** Rutas de las notas individuales. */
+const NOTAS_PATHS: string[] = [
+  'src/assets/items/Notas/Music-Notes.png',
+  'src/assets/items/Notas/Music-Notes - copia.png',
+  'src/assets/items/Notas/Music-Notes - copia (2).png',
+  'src/assets/items/Notas/Music-Notes - copia (3).png',
+  'src/assets/items/Notas/Music-Notes - copia (4).png',
+  'src/assets/items/Notas/Music-Notes - copia (5).png',
+  'src/assets/items/Notas/Music-Notes - copia (6).png',
+];
 
 /** Estado interno de un beat de la línea temporal. */
 interface Beat {
@@ -131,6 +148,7 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
   private beats: Beat[] = [];
   private tiempoInicio = 0;
   private finalizado = false;
+  private esperandoInicio = true;
 
   // --- Señales medidas por rasgo ---
   private aciertos = 0;
@@ -144,7 +162,12 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
   private laneX = 0;
 
   // --- HUD ---
-  private hud: Phaser.GameObjects.Text | null = null;
+  private hudAciertos: Phaser.GameObjects.Text | null = null;
+  private hudFallos: Phaser.GameObjects.Text | null = null;
+  private hudTiempo: Phaser.GameObjects.Text | null = null;
+
+  // --- Personaje decorativo ---
+  private personajeDeco: Phaser.GameObjects.Sprite | null = null;
 
   /**
    * @param duracionMs Duración deseada de la sesión; se acota al rango válido
@@ -173,6 +196,7 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
     this.perillasIniciales = datos?.perillas ?? PERILLAS_DEFECTO;
     // Reinicio de estado (la instancia de escena puede reutilizarse).
     this.finalizado = false;
+    this.esperandoInicio = true;
     this.aciertos = 0;
     this.fallos = 0;
     this.riesgoSenal = 0;
@@ -186,9 +210,33 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
     this.entradaInput = input;
   }
 
-  /** Sin assets externos en Fase 1; las texturas se generan en `create()`. */
+  /** Carga las notas musicales individuales y animaciones del personaje. */
   preload(): void {
-    // No-op: arte placeholder generado en runtime.
+    // Cargar cada nota individual.
+    for (let i = 0; i < NOTAS_KEYS.length; i++) {
+      const key = NOTAS_KEYS[i] as string;
+      const path = NOTAS_PATHS[i] as string;
+      if (!this.textures.exists(key)) {
+        this.load.image(key, path);
+      }
+    }
+
+    // Cargar spritesheet de Jump del personaje seleccionado (para reacción).
+    const idPersonaje = this.game.registry.get('personaje_seleccionado') as string | null;
+    if (idPersonaje) {
+      const mapa: Record<string, string> = {
+        pink_monster: 'src/assets/personajes/1 Pink_Monster/Pink_Monster_Jump_8.png',
+        owlet_monster: 'src/assets/personajes/2 Owlet_Monster/Owlet_Monster_Jump_8.png',
+        dude_monster: 'src/assets/personajes/3 Dude_Monster/Dude_Monster_Jump_8.png',
+      };
+      const keyJump = `${idPersonaje}_jump`;
+      if (mapa[idPersonaje] && !this.textures.exists(keyJump)) {
+        this.load.spritesheet(keyJump, mapa[idPersonaje], {
+          frameWidth: 32,
+          frameHeight: 32,
+        });
+      }
+    }
   }
 
   /**
@@ -216,19 +264,27 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
     this.spawnY = -20;
 
     this.dibujarFondo(width, height);
+    this.crearTitulo(width);
+    this.crearInstruccion(width);
     this.crearLineaAcierto(width);
+    this.crearDecoracionAnimada(width, height);
     this.crearBeats();
     this.crearHud();
+    this.crearPersonajeDecorativo(width, height);
 
     // Colaboradores concretos del Sistema_Mutacion.
     this.audio = new GestorAudioPhaser(this);
     this.overlay = new OverlayTextoPhaser(this);
 
-    // Marca de inicio de sesión (Requirement 2.1).
-    this.tiempoInicio = this.time.now;
-
     // Aplica las perillas resueltas por el Shell (Requirements 2.5, 9.4).
     this.aplicarPerillas(this.perillasIniciales);
+
+    // Esperar mostrando instrucciones antes de arrancar.
+    this.esperandoInicio = true;
+    this.time.delayedCall(5000, () => {
+      this.esperandoInicio = false;
+      this.tiempoInicio = this.time.now;
+    });
   }
 
   /**
@@ -240,6 +296,7 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
    */
   override update(tiempo: number): void {
     if (this.finalizado) return;
+    if (this.esperandoInicio) return;
 
     // Contrato de InputUnificado: actualizar el estado just-pressed cada frame.
     // `update()` es propio de la implementación concreta (InputTeclado) y no
@@ -359,45 +416,515 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
     }
   }
 
-  /** Fondo sólido oscuro para contraste del arte placeholder. */
+  /** Fondo negro puro + carril ancho + líneas guía + decoración neón pro. */
   private dibujarFondo(width: number, height: number): void {
+    // Fondo negro puro.
     this.add
-      .rectangle(0, 0, width, height, 0x0b0b12)
+      .rectangle(0, 0, width, height, 0x000000)
       .setOrigin(0, 0)
       .setDepth(-10);
+
+    // Ancho del carril amplio (zona donde caen las notas).
+    const anchoCarril = 340;
+    const izqCarril = this.laneX - anchoCarril / 2;
+    const derCarril = this.laneX + anchoCarril / 2;
+
+    // Fondo sutil del carril (un poco más claro que el negro puro).
+    this.add
+      .rectangle(this.laneX, height / 2, anchoCarril, height, 0x06061a)
+      .setDepth(-9);
+
+    // Gradiente lateral sutil (bordes del carril con un toque de color).
+    const grad = this.add.graphics().setDepth(-8);
+    grad.fillStyle(0xff44cc, 0.03);
+    grad.fillRect(izqCarril - 4, 0, 4, height);
+    grad.fillRect(derCarril, 0, 4, height);
+
+    // Líneas guía verticales punteadas (magenta/rosa).
+    const guia = this.add.graphics().setDepth(-5);
+    const dashLen = 10;
+    const gapLen = 14;
+    const colorGuia = 0xff44cc;
+
+    // Bordes del carril — más visibles.
+    guia.lineStyle(2, colorGuia, 0.7);
+    for (let y = 0; y < height; y += dashLen + gapLen) {
+      guia.beginPath();
+      guia.moveTo(izqCarril, y);
+      guia.lineTo(izqCarril, Math.min(y + dashLen, height));
+      guia.strokePath();
+      guia.beginPath();
+      guia.moveTo(derCarril, y);
+      guia.lineTo(derCarril, Math.min(y + dashLen, height));
+      guia.strokePath();
+    }
+
+    // Línea central punteada sutil.
+    guia.lineStyle(1, colorGuia, 0.15);
+    for (let y = 0; y < height; y += dashLen + gapLen) {
+      guia.beginPath();
+      guia.moveTo(this.laneX, y);
+      guia.lineTo(this.laneX, Math.min(y + dashLen, height));
+      guia.strokePath();
+    }
+
+    // === DECORACIÓN PRO ===
+
+    const deco = this.add.graphics().setDepth(-7);
+
+    // Barras de ecualizador a los lados (varias alturas, efecto visual estático).
+    const colorCyan = 0x00e5ff;
+    const colorMagenta = 0xff44cc;
+    for (let i = 0; i < 10; i++) {
+      const yPos = 50 + i * 48;
+      const largoIzq = 20 + Math.floor(Math.random() * 80);
+      const largoDer = 20 + Math.floor(Math.random() * 80);
+      const alpha = 0.06 + Math.random() * 0.08;
+      const color = i % 2 === 0 ? colorCyan : colorMagenta;
+
+      // Lado izquierdo — barras que crecen hacia la izquierda
+      deco.fillStyle(color, alpha);
+      deco.fillRect(izqCarril - largoIzq - 15, yPos, largoIzq, 3);
+
+      // Lado derecho — barras que crecen hacia la derecha
+      deco.fillStyle(color, alpha);
+      deco.fillRect(derCarril + 15, yPos, largoDer, 3);
+    }
+
+    // Puntos brillantes dispersos (estrellas/partículas estáticas).
+    for (let i = 0; i < 20; i++) {
+      const px = Math.random() * width;
+      const py = Math.random() * height;
+      // Evitar poner puntos dentro del carril.
+      if (px > izqCarril - 10 && px < derCarril + 10) continue;
+      const size = 1 + Math.floor(Math.random() * 2);
+      const dotColor = Math.random() > 0.5 ? colorCyan : colorMagenta;
+      deco.fillStyle(dotColor, 0.15 + Math.random() * 0.2);
+      deco.fillRect(px, py, size, size);
+    }
+
+    // Líneas horizontales decorativas finas (grid cyberpunk).
+    deco.lineStyle(1, colorCyan, 0.04);
+    for (let y = 100; y < height - 100; y += 60) {
+      deco.beginPath();
+      deco.moveTo(0, y);
+      deco.lineTo(izqCarril - 20, y);
+      deco.strokePath();
+      deco.beginPath();
+      deco.moveTo(derCarril + 20, y);
+      deco.lineTo(width, y);
+      deco.strokePath();
+    }
+
+    // Esquinas decorativas (marcos en las esquinas de la pantalla).
+    const esquina = this.add.graphics().setDepth(-6);
+    const cornerLen = 30;
+    esquina.lineStyle(2, colorCyan, 0.3);
+    // Superior izquierda
+    esquina.beginPath();
+    esquina.moveTo(8, 8 + cornerLen);
+    esquina.lineTo(8, 8);
+    esquina.lineTo(8 + cornerLen, 8);
+    esquina.strokePath();
+    // Superior derecha
+    esquina.beginPath();
+    esquina.moveTo(width - 8 - cornerLen, 8);
+    esquina.lineTo(width - 8, 8);
+    esquina.lineTo(width - 8, 8 + cornerLen);
+    esquina.strokePath();
+    // Inferior izquierda
+    esquina.beginPath();
+    esquina.moveTo(8, height - 8 - cornerLen);
+    esquina.lineTo(8, height - 8);
+    esquina.lineTo(8 + cornerLen, height - 8);
+    esquina.strokePath();
+    // Inferior derecha
+    esquina.beginPath();
+    esquina.moveTo(width - 8 - cornerLen, height - 8);
+    esquina.lineTo(width - 8, height - 8);
+    esquina.lineTo(width - 8, height - 8 - cornerLen);
+    esquina.strokePath();
   }
 
-  /** Crea la línea de acierto como sprite tintable ancho y fino. */
+  /** Título del nivel en la parte superior centrado. */
+  private crearTitulo(width: number): void {
+    this.add
+      .text(width / 2, 18, '♪ RITMO ♪', {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '20px',
+        color: '#00ffff',
+        shadow: {
+          offsetX: 0,
+          offsetY: 0,
+          color: '#00ffff',
+          blur: 8,
+          fill: true,
+        },
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(1000)
+      .setAlpha(0.9);
+  }
+
+  /** Texto de instrucción centrado que aparece antes de que arranque el juego. */
+  private crearInstruccion(width: number): void {
+    const { height } = this.scale;
+    const instruccion = this.add
+      .text(width / 2, height / 2, 'LAS NOTAS CAEN POR EL CENTRO\nCUANDO LLEGUEN A LA LINEA\nPRESIONA ESPACIO', {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '11px',
+        color: '#ffffff',
+        align: 'center',
+        lineSpacing: 10,
+        shadow: {
+          offsetX: 0,
+          offsetY: 0,
+          color: '#ff44cc',
+          blur: 6,
+          fill: true,
+        },
+      })
+      .setOrigin(0.5, 0.5)
+      .setDepth(1001)
+      .setAlpha(1);
+
+    // Se desvanece cuando el juego arranca (tras 5 segundos).
+    this.time.delayedCall(4500, () => {
+      this.tweens.add({
+        targets: instruccion,
+        alpha: 0,
+        duration: 400,
+        onComplete: () => instruccion.destroy(),
+      });
+    });
+  }
+
+  /** Crea la línea de acierto con glow intenso, partículas y animaciones. */
   private crearLineaAcierto(width: number): void {
+    // Glow externo muy amplio (halo difuso).
+    this.add
+      .rectangle(this.laneX, this.hitLineY, width, 28, 0x00e5ff)
+      .setAlpha(0.08)
+      .setDepth(0);
+    // Glow medio.
+    this.add
+      .rectangle(this.laneX, this.hitLineY, width, 14, 0x00e5ff)
+      .setAlpha(0.25)
+      .setDepth(1);
+    // Glow cercano.
+    this.add
+      .rectangle(this.laneX, this.hitLineY, width, 6, 0x00ffff)
+      .setAlpha(0.5)
+      .setDepth(1);
+    // Línea central brillante.
     const linea = this.add
       .sprite(this.laneX, this.hitLineY, KEY_TEXTURA)
-      .setDisplaySize(width, 6)
-      .setTint(0xffffff);
+      .setDisplaySize(width, 3)
+      .setTint(0x00ffff);
+    linea.setDepth(2);
     this.spritesTintables.push(linea);
+
+    // Pulso de la línea (breath animation).
+    this.tweens.add({
+      targets: linea,
+      alpha: { from: 1, to: 0.6 },
+      displayHeight: { from: 3, to: 5 },
+      duration: 400,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // Partículas principales — cuadraditos cyan flotando sobre la línea.
+    this.add.particles(0, 0, KEY_TEXTURA, {
+      x: { min: 0, max: width },
+      y: { min: this.hitLineY - 8, max: this.hitLineY + 8 },
+      lifespan: 1000,
+      speed: { min: 30, max: 80 },
+      angle: { min: 160, max: 200 },
+      scale: { start: 0.5, end: 0 },
+      alpha: { start: 0.9, end: 0 },
+      tint: 0x00e5ff,
+      frequency: 40,
+      quantity: 2,
+      blendMode: Phaser.BlendModes.ADD,
+    }).setDepth(3);
+
+    // Partículas secundarias — magenta/rosa más lentas.
+    this.add.particles(0, 0, KEY_TEXTURA, {
+      x: { min: 0, max: width },
+      y: { min: this.hitLineY - 12, max: this.hitLineY + 12 },
+      lifespan: 1800,
+      speed: { min: 10, max: 30 },
+      angle: { min: 250, max: 290 },
+      scale: { start: 0.3, end: 0 },
+      alpha: { start: 0.6, end: 0 },
+      tint: 0xff44cc,
+      frequency: 120,
+      quantity: 1,
+      blendMode: Phaser.BlendModes.ADD,
+    }).setDepth(3);
+
+    // Chispas rápidas que se elevan desde la línea.
+    this.add.particles(0, 0, KEY_TEXTURA, {
+      x: { min: this.laneX - 140, max: this.laneX + 140 },
+      y: this.hitLineY,
+      lifespan: 600,
+      speed: { min: 40, max: 100 },
+      angle: { min: 250, max: 290 },
+      scale: { start: 0.2, end: 0 },
+      alpha: { start: 1, end: 0 },
+      tint: 0xffffff,
+      frequency: 200,
+      quantity: 1,
+      blendMode: Phaser.BlendModes.ADD,
+    }).setDepth(4);
   }
 
-  /** Crea todos los sprites de beats (invisibles hasta entrar en pantalla). */
+  /** Agrega decoración ambiental animada (partículas de fondo + efectos). */
+  private crearDecoracionAnimada(width: number, height: number): void {
+    // Partículas ambientales lentas cayendo por toda la pantalla (como polvo/estrellas).
+    this.add.particles(0, 0, KEY_TEXTURA, {
+      x: { min: 0, max: width },
+      y: -10,
+      lifespan: 6000,
+      speed: { min: 10, max: 25 },
+      angle: { min: 85, max: 95 },
+      scale: { start: 0.15, end: 0.05 },
+      alpha: { start: 0.3, end: 0 },
+      tint: 0x00e5ff,
+      frequency: 300,
+      quantity: 1,
+    }).setDepth(-4);
+
+    // Partículas magenta ambientales más escasas.
+    this.add.particles(0, 0, KEY_TEXTURA, {
+      x: { min: 0, max: width },
+      y: -10,
+      lifespan: 8000,
+      speed: { min: 5, max: 15 },
+      angle: { min: 80, max: 100 },
+      scale: { start: 0.1, end: 0 },
+      alpha: { start: 0.2, end: 0 },
+      tint: 0xff44cc,
+      frequency: 500,
+      quantity: 1,
+    }).setDepth(-4);
+
+    // Pulso de luz en el centro cada cierto tiempo (como un latido rítmico).
+    const pulso = this.add
+      .circle(this.laneX, this.hitLineY, 60, 0x00ffff, 0)
+      .setDepth(-3);
+    this.tweens.add({
+      targets: pulso,
+      alpha: { from: 0, to: 0.12 },
+      scale: { from: 0.5, to: 1.5 },
+      duration: 600,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // Líneas horizontales que parpadean suavemente a los costados.
+    // Solo en la zona media, sin tocar los bordes de la pantalla.
+    const lados = this.add.graphics().setDepth(-3);
+    lados.lineStyle(1, 0x00e5ff, 0.15);
+    const anchoCarril = 340;
+    const izq = this.laneX - anchoCarril / 2;
+    const der = this.laneX + anchoCarril / 2;
+    for (let i = 0; i < 3; i++) {
+      const y = height * 0.35 + i * (height * 0.15);
+      // Solo dibujar lejos de los bordes (dejar 50px de margen).
+      lados.beginPath();
+      lados.moveTo(50, y);
+      lados.lineTo(izq - 40, y);
+      lados.strokePath();
+      lados.beginPath();
+      lados.moveTo(der + 40, y);
+      lados.lineTo(width - 50, y);
+      lados.strokePath();
+    }
+    this.tweens.add({
+      targets: lados,
+      alpha: { from: 0.3, to: 0.8 },
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // Ecualizador animado a ambos lados (barras que suben/bajan).
+    const numBarras = 8;
+    const barraAncho = 4;
+    const barraGap = 6;
+    const eqBaseY = height * 0.7;
+    const colores = [0x00ffff, 0x00e5ff, 0xff44cc, 0x00ffff, 0xff44cc, 0x00e5ff, 0x00ffff, 0xff44cc];
+
+    for (let i = 0; i < numBarras; i++) {
+      const color = colores[i % colores.length] as number;
+      // Lado izquierdo
+      const barraIzq = this.add
+        .rectangle(
+          30 + i * (barraAncho + barraGap),
+          eqBaseY,
+          barraAncho,
+          10,
+          color
+        )
+        .setOrigin(0, 1)
+        .setAlpha(0.5)
+        .setDepth(-2);
+      this.tweens.add({
+        targets: barraIzq,
+        displayHeight: { from: 10, to: 20 + Math.random() * 40 },
+        duration: 300 + Math.random() * 400,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+        delay: i * 80,
+      });
+
+      // Lado derecho (espejado)
+      const barraDer = this.add
+        .rectangle(
+          width - 30 - i * (barraAncho + barraGap),
+          eqBaseY,
+          barraAncho,
+          10,
+          color
+        )
+        .setOrigin(1, 1)
+        .setAlpha(0.5)
+        .setDepth(-2);
+      this.tweens.add({
+        targets: barraDer,
+        displayHeight: { from: 10, to: 20 + Math.random() * 40 },
+        duration: 300 + Math.random() * 400,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+        delay: i * 80 + 100,
+      });
+    }
+  }
+
+  /** Crea todos los sprites de beats usando las notas individuales. */
   private crearBeats(): void {
-    this.beats = this.tiemposBeat.map((tiempoObjetivo) => {
-      const sprite = this.add
-        .sprite(this.laneX, this.spawnY, KEY_TEXTURA)
-        .setDisplaySize(30, 30)
-        .setVisible(false);
-      this.spritesTintables.push(sprite);
+    // Verificar si al menos una nota cargó.
+    const notasCargadas = NOTAS_KEYS.filter(k => this.textures.exists(k));
+    const usarNotas = notasCargadas.length > 0;
+
+    this.beats = this.tiemposBeat.map((tiempoObjetivo, i) => {
+      let sprite: Phaser.GameObjects.Sprite;
+      if (usarNotas) {
+        const key = notasCargadas[i % notasCargadas.length] as string;
+        sprite = this.add
+          .sprite(this.laneX, this.spawnY, key)
+          .setDisplaySize(40, 40)
+          .setVisible(false);
+      } else {
+        // Fallback al placeholder si ninguna nota cargó.
+        sprite = this.add
+          .sprite(this.laneX, this.spawnY, KEY_TEXTURA)
+          .setDisplaySize(30, 30)
+          .setTint(0xffffff)
+          .setVisible(false);
+      }
+      sprite.setDepth(10);
       return { sprite, tiempoObjetivo, juzgada: false };
     });
   }
 
-  /** Crea el HUD de aciertos/fallos/tiempo. */
+  /** Crea el HUD profesional estilo arcade neón — compacto. */
   private crearHud(): void {
-    this.hud = this.add
-      .text(12, 12, '', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '16px',
-        color: '#7cf9ff',
-      })
-      .setScrollFactor(0)
-      .setDepth(1000);
+    const valorStyle = {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '14px',
+      color: '#ffffff',
+      shadow: {
+        offsetX: 0,
+        offsetY: 0,
+        color: '#00ffff',
+        blur: 6,
+        fill: true,
+      },
+    };
+    const labelStyle = {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '8px',
+      color: '#ff44cc',
+    };
+
+    // ACIERTOS
+    this.add.text(20, 48, 'ACIERTOS', labelStyle).setScrollFactor(0).setDepth(1000);
+    this.hudAciertos = this.add.text(20, 60, '0000', valorStyle).setScrollFactor(0).setDepth(1000);
+
+    // FALLOS
+    this.add.text(20, 90, 'FALLOS', labelStyle).setScrollFactor(0).setDepth(1000);
+    this.hudFallos = this.add.text(20, 102, '0000', valorStyle).setScrollFactor(0).setDepth(1000);
+
+    // TIEMPO
+    this.add.text(20, 132, 'TIEMPO', labelStyle).setScrollFactor(0).setDepth(1000);
+    this.hudTiempo = this.add.text(20, 144, '01:15', valorStyle).setScrollFactor(0).setDepth(1000);
+  }
+
+  /**
+   * Muestra el personaje seleccionado como decoración al costado izquierdo,
+   * más chico, sobre la línea de acierto. Reacciona al acertar con Jump.
+   */
+  private crearPersonajeDecorativo(_width: number, _height: number): void {
+    const idPersonaje = this.game.registry.get(CLAVE_PERSONAJE) as string | null;
+    if (!idPersonaje) return;
+
+    const keyIdle = `${idPersonaje}_idle`;
+    if (!this.textures.exists(keyIdle)) return;
+
+    // Crear animación idle.
+    const animKey = `${idPersonaje}_idle_anim_ritmo`;
+    if (!this.anims.exists(animKey)) {
+      this.anims.create({
+        key: animKey,
+        frames: this.anims.generateFrameNumbers(keyIdle, { start: 0, end: 3 }),
+        frameRate: 6,
+        repeat: -1,
+      });
+    }
+
+    // Crear animación de Jump para reacción al acierto (8 frames).
+    const keyJump = `${idPersonaje}_jump`;
+    const animJumpKey = `${idPersonaje}_jump_ritmo`;
+    if (this.textures.exists(keyJump) && !this.anims.exists(animJumpKey)) {
+      this.anims.create({
+        key: animJumpKey,
+        frames: this.anims.generateFrameNumbers(keyJump, { start: 0, end: 7 }),
+        frameRate: 16,
+        repeat: 0,
+      });
+    }
+
+    // Posición: bien a la izquierda, separado del carril.
+    const posX = 80;
+    const posY = this.hitLineY - 10;
+
+    this.personajeDeco = this.add
+      .sprite(posX, posY, keyIdle)
+      .setScale(2.5)
+      .setAlpha(0.9)
+      .setDepth(5);
+    this.personajeDeco.play(animKey);
+  }
+
+  /**
+   * Reacción del personaje al acertar: solo un flash breve, sin saltos ni explosiones.
+   */
+  private reaccionPersonajeAcierto(): void {
+    if (!this.personajeDeco) return;
+
+    // Solo flash de brillo momentáneo — sin saltos ni scale.
+    this.personajeDeco.setAlpha(1);
+    this.time.delayedCall(150, () => {
+      this.personajeDeco?.setAlpha(0.9);
+    });
   }
 
   /**
@@ -428,6 +955,17 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
       const progreso = 1 - restante / LEAD_TIME_MS; // 0 en spawn, 1 en la línea
       beat.sprite.setVisible(true);
       beat.sprite.y = this.spawnY + (this.hitLineY - this.spawnY) * progreso;
+
+      // Oscilación lateral suave (wobble) mientras cae.
+      const wobble = Math.sin(transcurrido * 0.004 + beat.tiempoObjetivo) * 8;
+      beat.sprite.x = this.laneX + wobble;
+
+      // Rotación sutil.
+      beat.sprite.rotation = Math.sin(transcurrido * 0.003 + beat.tiempoObjetivo) * 0.15;
+
+      // Scale pulsante leve (late mientras cae).
+      const pulse = 1 + Math.sin(transcurrido * 0.008 + beat.tiempoObjetivo) * 0.08;
+      beat.sprite.setScale(pulse);
     }
   }
 
@@ -479,22 +1017,79 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
       if (mejorAbs > UMBRAL_AJUSTADO_MS) {
         this.riesgoSenal += 1;
       }
+      // Efecto visual de explosión en la posición del beat.
+      this.efectoAcierto(mejor.sprite.x, mejor.sprite.y);
+      // Reacción del personaje decorativo al acertar.
+      this.reaccionPersonajeAcierto();
     } else {
       // Pulsación fuera de la ventana de todo beat (Requirement 2.3).
       this.fallos += 1;
+      // Flash rojo sutil en la línea al fallar.
+      this.efectoFallo();
     }
   }
 
-  /** Refresca el HUD con el estado actual de la sesión. */
+  /** Explosión de partículas al acertar un beat. */
+  private efectoAcierto(x: number, y: number): void {
+    // Burst de partículas cyan/blancas desde la posición del beat.
+    const emitter = this.add.particles(x, y, KEY_TEXTURA, {
+      speed: { min: 80, max: 200 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 0.5, end: 0 },
+      alpha: { start: 1, end: 0 },
+      tint: [0x00ffff, 0xffffff, 0x00e5ff],
+      lifespan: 400,
+      quantity: 8,
+      blendMode: Phaser.BlendModes.ADD,
+      emitting: false,
+    });
+    emitter.setDepth(15);
+    emitter.explode(8);
+    // Limpiar el emitter después de que terminen las partículas.
+    this.time.delayedCall(500, () => emitter.destroy());
+
+    // Flash circular momentáneo.
+    const flash = this.add
+      .circle(x, y, 20, 0x00ffff, 0.6)
+      .setDepth(14)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      scale: 2,
+      duration: 200,
+      onComplete: () => flash.destroy(),
+    });
+  }
+
+  /** Flash rojo en la línea al fallar. */
+  private efectoFallo(): void {
+    const flash = this.add
+      .rectangle(this.laneX, this.hitLineY, this.scale.width, 6, 0xff2222)
+      .setAlpha(0.6)
+      .setDepth(14)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      duration: 150,
+      onComplete: () => flash.destroy(),
+    });
+  }
+
+  /** Refresca los valores del HUD. */
   private actualizarHud(transcurrido: number): void {
-    if (!this.hud) return;
     const restanteS = Math.max(
       0,
       Math.ceil((this.duracionMs - transcurrido) / 1000)
     );
-    this.hud.setText(
-      `RITMO  aciertos:${this.aciertos}  fallos:${this.fallos}  t:${restanteS}s`
-    );
+    const minutos = Math.floor(restanteS / 60);
+    const segundos = restanteS % 60;
+    const tiempoStr = `${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
+
+    this.hudAciertos?.setText(String(this.aciertos).padStart(4, '0'));
+    this.hudFallos?.setText(String(this.fallos).padStart(4, '0'));
+    this.hudTiempo?.setText(tiempoStr);
   }
 
   /**

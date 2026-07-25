@@ -60,7 +60,7 @@ const TX = {
 } as const;
 
 /** Dimensiones del mundo (más ancho que la cámara para habilitar exploración). */
-const ANCHO_MUNDO = 1920;
+const ANCHO_MUNDO = 2800;
 const ALTO_MUNDO = 540;
 
 /** Parámetros de movimiento del jugador (Requirements 1.2, 1.3). */
@@ -114,8 +114,14 @@ const PLATAFORMAS: readonly RectPlataforma[] = [
   { x: 900, y: 250, ancho: 140, alto: 24 },
   { x: 1180, y: 360, ancho: 200, alto: 24 },
   { x: 1500, y: 280, ancho: 160, alto: 24 },
-  // Cornisa alta "secreta" que oculta un acceso.
+  // Cornisa alta "secreta" que oculta el acceso al ritmo.
   { x: 1750, y: 140, ancho: 150, alto: 24 },
+  // --- Tramo nuevo después del portal de ritmo ---
+  { x: 2000, y: 380, ancho: 180, alto: 24 },
+  { x: 2250, y: 300, ancho: 160, alto: 24 },
+  { x: 2500, y: 220, ancho: 140, alto: 24 },
+  // Cornisa alta para el acceso al shooter.
+  { x: 2650, y: 140, ancho: 150, alto: 24 },
 ];
 
 /** Monedas coleccionables (rasgo `logro`, Requirement 1.4). */
@@ -141,7 +147,6 @@ const ENEMIGOS: readonly { x: number; y: number }[] = [
 /** Puntos de exploración ocultos/apartados (rasgo `curiosidad`). */
 const PUNTOS_EXPLORACION: readonly { x: number; y: number }[] = [
   { x: 1780, y: 80 },
-  { x: 40, y: 80 },
   { x: 940, y: 160 },
 ];
 
@@ -158,8 +163,8 @@ const ACCESOS: readonly {
 }[] = [
   // Escondido sobre la cornisa alta a la derecha.
   { x: 1750, y: 110, ancho: 48, alto: 56, destino: 'ritmo' },
-  // Escondido en el rincón superior izquierdo, fuera de la ruta obvia.
-  { x: 60, y: 90, ancho: 48, alto: 56, destino: 'shooter' },
+  // Sobre la cornisa alta al final del nivel (x:2650, y:140).
+  { x: 2650, y: 110, ancho: 48, alto: 56, destino: 'shooter' },
 ];
 
 /**
