@@ -26,7 +26,9 @@ export type { OverlayTextoOpciones } from './overlay-texto';
 export {
   crearCapaClima,
   asegurarTexturaParticula,
+  asegurarTexturaNiebla,
   KEY_TEXTURA_PARTICULA,
+  KEY_TEXTURA_NIEBLA,
 } from './clima';
 
 export { SistemaMutacion, TINTES_POR_PALETA } from './sistemaMutacion';

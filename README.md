@@ -128,3 +128,4 @@ Proyecto para el Hackaton de Código Facilito.
 | Autos | [Top Down Pixel Art Race Cars — AIM Studios](https://aim-studios.itch.io/top-down-pixel-art-race-cars) |
 | Árbol | [Árbol pixel PNG — Magnific](https://www.magnific.com/es/vectores/arbol-pixel-png) |
 | Arbusto | [Pixel arbustos — Vecteezy](https://es.vecteezy.com/arte-vectorial/22908198-pixel-arbustos-o-arbustos-con-verdor-y-follaje) |
+| Demon (enemigo) | [Flying Demon 2D Pixel Art — Xzany](https://xzany.itch.io/flying-demon-2d-pixel-art) |

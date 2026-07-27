@@ -28,16 +28,17 @@ import type {
   DatosInicioEscena,
   IEscena,
   ContextoMutacion,
+  GestorAudio,
 } from '../contrato';
 import {
   SistemaMutacion,
-  GestorAudioPhaser,
   OverlayTextoPhaser,
   crearCapaClima,
   asegurarTexturaParticula,
 } from '../mutacion';
 import { mostrarPanelIA } from '../mutacion/panelIA';
 import { sfxHit } from '../audio/sfx';
+import { crearGestorAudio } from '../audio/gestorAudioHibrido';
 import { CLAVE_PERSONAJE } from './EscenaSeleccion';
 import { TrackGenerator } from './carreras/TrackGenerator';
 import { ScoringManager } from './carreras/ScoringManager';
@@ -115,7 +116,7 @@ export class EscenaCarreras extends Phaser.Scene implements IEscena {
   private readonly sistemaMutacion = new SistemaMutacion();
 
   /** Gestor de audio para el mood musical (Requirement 8.5). */
-  private gestorAudio?: GestorAudioPhaser;
+  private gestorAudio?: GestorAudio;
 
   /** Overlay de texto para el mensaje de la IA (Requirement 8.6). */
   private overlayTexto?: OverlayTextoPhaser;
@@ -314,7 +315,7 @@ export class EscenaCarreras extends Phaser.Scene implements IEscena {
 
     // ─── 4b. Inicializar subsistemas de mutación ─────────────────────────────
     asegurarTexturaParticula(this);
-    this.gestorAudio = new GestorAudioPhaser(this);
+    this.gestorAudio = crearGestorAudio(this);
     this.overlayTexto = new OverlayTextoPhaser(this);
     this.rendererCarreras = new Renderer(this);
     this.rendererCarreras.inicializar();

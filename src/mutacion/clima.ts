@@ -21,6 +21,9 @@ import type { Clima } from '../contrato';
 /** Key de la textura de partícula 2x2 blanca generada en runtime. */
 export const KEY_TEXTURA_PARTICULA = 'mut_particula_1px';
 
+/** Key de la textura circular difusa para niebla. */
+export const KEY_TEXTURA_NIEBLA = 'mut_niebla_blob';
+
 /** Profundidad alta para que la capa de clima quede por encima del mundo. */
 const PROFUNDIDAD_CLIMA = 900;
 
@@ -40,6 +43,39 @@ export function asegurarTexturaParticula(scene: Phaser.Scene): string {
     g.destroy();
   }
   return KEY_TEXTURA_PARTICULA;
+}
+
+/**
+ * Genera una textura circular con gradiente radial para simular niebla/nube.
+ *
+ * Crea un círculo de 64x64 px con alpha que decrece desde el centro hacia el
+ * borde (blob suave), dando un aspecto orgánico de nube en vez de cuadrados.
+ */
+export function asegurarTexturaNiebla(scene: Phaser.Scene): string {
+  if (!scene.textures.exists(KEY_TEXTURA_NIEBLA)) {
+    const size = 64;
+    const half = size / 2;
+    const g = scene.make.graphics({ x: 0, y: 0 }, false);
+
+    // Dibujar varios círculos concéntricos con alpha decreciente para simular
+    // un gradiente radial suave (Phaser Graphics no soporta gradientes nativos)
+    const steps = 12;
+    for (let i = steps; i >= 0; i--) {
+      const ratio = i / steps;
+      const radius = half * ratio;
+      const alpha = (1 - ratio) * 0.4;
+      g.fillStyle(0xffffff, alpha);
+      g.fillCircle(half, half, radius);
+    }
+
+    // Centro más denso
+    g.fillStyle(0xffffff, 0.5);
+    g.fillCircle(half, half, half * 0.3);
+
+    g.generateTexture(KEY_TEXTURA_NIEBLA, size, size);
+    g.destroy();
+  }
+  return KEY_TEXTURA_NIEBLA;
 }
 
 /**
@@ -111,16 +147,19 @@ export function crearCapaClima(
         lifespan: 5000,
         speedX: { min: -20, max: 20 },
         speedY: { min: -8, max: 8 },
-        scale: { start: 15, end: 25 },
+        scale: { start: 1.5, end: 2.5 },
         quantity: 2,
         frequency: 150,
-        alpha: { min: 0.05, max: 0.15 },
+        alpha: { min: 0.08, max: 0.25 },
         tint: 0xcfcfe0,
       };
       break;
   }
 
-  const emitter = scene.add.particles(0, 0, key, config);
+  // Para niebla usar la textura circular difusa; para el resto la de 2x2.
+  const texturaFinal = clima === 'niebla' ? asegurarTexturaNiebla(scene) : key;
+
+  const emitter = scene.add.particles(0, 0, texturaFinal, config);
   emitter.setDepth(PROFUNDIDAD_CLIMA);
   emitter.setScrollFactor(0);
   return emitter;

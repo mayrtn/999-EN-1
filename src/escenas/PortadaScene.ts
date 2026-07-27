@@ -338,7 +338,7 @@ export class PortadaScene extends Phaser.Scene {
     // HACKATHON CREDIT — texto sutil al fondo
     // =====================================================================
     this.add
-      .text(w / 2, h * 0.96, 'Hackathon Código Facilito 2024', {
+      .text(w / 2, h * 0.96, 'Hackathon Código Facilito', {
         fontFamily: '"Press Start 2P"',
         fontSize: '7px',
         color: '#333355',
@@ -400,8 +400,8 @@ export class PortadaScene extends Phaser.Scene {
     const h = this.scale.height;
     const elementos: Phaser.GameObjects.GameObject[] = [];
 
-    // Fondo semi-transparente
-    const bg = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.85);
+    // Fondo semi-transparente más oscuro
+    const bg = this.add.rectangle(w / 2, h / 2, w, h, 0x020208, 0.94);
     bg.setScrollFactor(0).setDepth(200).setAlpha(0);
     elementos.push(bg);
 
@@ -712,8 +712,8 @@ export class PortadaScene extends Phaser.Scene {
     const h = this.scale.height;
     const elementos: Phaser.GameObjects.GameObject[] = [];
 
-    // Fondo semi-transparente
-    const bg = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.85);
+    // Fondo semi-transparente más oscuro
+    const bg = this.add.rectangle(w / 2, h / 2, w, h, 0x020208, 0.94);
     bg.setScrollFactor(0).setDepth(200).setAlpha(0);
     elementos.push(bg);
 
@@ -880,7 +880,7 @@ export class PortadaScene extends Phaser.Scene {
     elementos.push(iaText);
 
     const creditText = this.add
-      .text(w / 2, h * 0.84, 'Hackathon Codigo Facilito 2024', {
+      .text(w / 2, h * 0.84, 'Hackathon Codigo Facilito', {
         fontFamily: '"Press Start 2P"',
         fontSize: '8px',
         color: '#888888',

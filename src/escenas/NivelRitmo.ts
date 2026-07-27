@@ -38,15 +38,16 @@ import type {
   DatosInicioEscena,
   IEscena,
   ContextoMutacion,
+  GestorAudio,
 } from '../contrato';
 import {
   SistemaMutacion,
-  GestorAudioPhaser,
   OverlayTextoPhaser,
   crearCapaClima,
 } from '../mutacion';
 import { mostrarPanelIA } from '../mutacion/panelIA';
 import { sfxRhythmHit, sfxRhythmMiss } from '../audio/sfx';
+import { crearGestorAudio } from '../audio/gestorAudioHibrido';
 import { CLAVE_PERSONAJE } from './EscenaSeleccion';
 
 /** Duración mínima de la sesión en ms (Requirement 2.1). */
@@ -143,7 +144,7 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
 
   // --- Sistema de mutación y sus colaboradores concretos ---
   private readonly sistemaMutacion = new SistemaMutacion();
-  private audio: GestorAudioPhaser | null = null;
+  private audio: GestorAudio | null = null;
   private overlay: OverlayTextoPhaser | null = null;
   private capaClima: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private readonly spritesTintables: Phaser.GameObjects.Sprite[] = [];
@@ -277,7 +278,7 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
     this.crearPersonajeDecorativo(width, height);
 
     // Colaboradores concretos del Sistema_Mutacion.
-    this.audio = new GestorAudioPhaser(this);
+    this.audio = crearGestorAudio(this);
     this.overlay = new OverlayTextoPhaser(this);
 
     // Aplica las perillas resueltas por el Shell (Requirements 2.5, 9.4).
@@ -365,7 +366,7 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
       // lo maneja. Se castea para satisfacer el contrato sin cambiar la interfaz.
       capaClima: this
         .capaClima as unknown as Phaser.GameObjects.Particles.ParticleEmitter,
-      audio: this.audio ?? new GestorAudioPhaser(this),
+      audio: this.audio ?? crearGestorAudio(this),
       overlayTexto: this.overlay ?? new OverlayTextoPhaser(this),
       // spawnerEnemigos omitido a propósito (ritmo sin enemigos).
     };

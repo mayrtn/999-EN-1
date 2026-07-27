@@ -12,6 +12,8 @@
  * defaults sensatos que no bloquean la implementación en paralelo; cuando el
  * equipo cierre la decisión, sólo se edita este archivo sin tocar Escenas.
  *
+ * Ver: `.kiro/steering/documento-decisiones.md` (Decisión 1).
+ *
  * @module input/mapa-teclas
  */
 
