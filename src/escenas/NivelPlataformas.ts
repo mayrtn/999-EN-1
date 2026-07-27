@@ -45,6 +45,7 @@ import {
   crearCapaClima,
   asegurarTexturaParticula,
 } from '../mutacion';
+import { sfxCoin, sfxCrystal, sfxJump, sfxPortal, sfxHit } from '../audio/sfx';
 import { CLAVE_PERSONAJE, PERSONAJES, type IdPersonaje } from './EscenaSeleccion';
 
 /** Id lógico de esta escena dentro del Contrato_Compartido. */
@@ -60,7 +61,7 @@ const TX = {
 } as const;
 
 /** Dimensiones del mundo (más ancho que la cámara para habilitar exploración). */
-const ANCHO_MUNDO = 2800;
+const ANCHO_MUNDO = 7000;
 const ALTO_MUNDO = 540;
 
 /** Parámetros de movimiento del jugador (Requirements 1.2, 1.3). */
@@ -109,45 +110,72 @@ interface AccesoOculto {
 /** Plataformas y suelo. La primera es el suelo continuo. */
 const PLATAFORMAS: readonly RectPlataforma[] = [
   { x: ANCHO_MUNDO / 2, y: ALTO_MUNDO - 16, ancho: ANCHO_MUNDO, alto: 32 },
-  { x: 360, y: 400, ancho: 180, alto: 24 },
-  { x: 640, y: 320, ancho: 160, alto: 24 },
-  { x: 900, y: 250, ancho: 140, alto: 24 },
-  { x: 1180, y: 360, ancho: 200, alto: 24 },
-  { x: 1500, y: 280, ancho: 160, alto: 24 },
-  // Cornisa alta "secreta" que oculta el acceso al ritmo.
-  { x: 1750, y: 140, ancho: 150, alto: 24 },
-  // --- Tramo nuevo después del portal de ritmo ---
-  { x: 2000, y: 380, ancho: 180, alto: 24 },
-  { x: 2250, y: 300, ancho: 160, alto: 24 },
-  { x: 2500, y: 220, ancho: 140, alto: 24 },
-  // Cornisa alta para el acceso al shooter.
-  { x: 2650, y: 140, ancho: 150, alto: 24 },
+  // --- Zona inicial ---
+  { x: 400, y: 400, ancho: 180, alto: 24 },
+  { x: 800, y: 350, ancho: 160, alto: 24 },
+  { x: 1200, y: 400, ancho: 200, alto: 24 },
+  // --- Escalera al portal ritmo (2 escalones + cornisa) ---
+  { x: 1800, y: 400, ancho: 170, alto: 24 },
+  { x: 2100, y: 280, ancho: 160, alto: 24 },
+  { x: 2400, y: 160, ancho: 160, alto: 24 }, // cornisa portal ritmo
+  // --- Zona media ---
+  { x: 2900, y: 400, ancho: 180, alto: 24 },
+  { x: 3300, y: 360, ancho: 160, alto: 24 },
+  { x: 3700, y: 400, ancho: 180, alto: 24 },
+  // --- Escalera al portal shooter (2 escalones + cornisa) ---
+  { x: 4100, y: 400, ancho: 160, alto: 24 },
+  { x: 4250, y: 280, ancho: 150, alto: 24 },
+  { x: 4400, y: 160, ancho: 160, alto: 24 }, // cornisa portal shooter
+  // --- Zona final ---
+  { x: 4900, y: 410, ancho: 180, alto: 24 },
+  { x: 5300, y: 370, ancho: 160, alto: 24 },
+  { x: 5700, y: 400, ancho: 170, alto: 24 },
+  // --- Escalera al portal carreras (2 escalones + cornisa) ---
+  { x: 6100, y: 400, ancho: 160, alto: 24 },
+  { x: 6250, y: 280, ancho: 150, alto: 24 },
+  { x: 6400, y: 160, ancho: 160, alto: 24 }, // cornisa portal carreras
+  // --- Después del último portal ---
+  { x: 6650, y: 400, ancho: 170, alto: 24 },
+  { x: 6850, y: 340, ancho: 150, alto: 24 },
 ];
 
 /** Monedas coleccionables (rasgo `logro`, Requirement 1.4). */
 const MONEDAS: readonly { x: number; y: number }[] = [
-  { x: 320, y: 360 },
-  { x: 600, y: 280 },
-  { x: 860, y: 210 },
-  { x: 1140, y: 320 },
-  { x: 1460, y: 240 },
-  { x: 150, y: 480 },
-  { x: 750, y: 480 },
-  { x: 1250, y: 480 },
+  { x: 400, y: 370 },    // sobre plataforma y:400
+  { x: 800, y: 320 },    // sobre plataforma y:350
+  { x: 1200, y: 370 },   // sobre plataforma y:400
+  { x: 1800, y: 370 },   // sobre escalón y:400
+  { x: 2100, y: 250 },   // sobre escalón y:280
+  { x: 2900, y: 370 },   // sobre plataforma y:400
+  { x: 3300, y: 330 },   // sobre plataforma y:360
+  { x: 3700, y: 370 },   // sobre plataforma y:400
+  { x: 4100, y: 370 },   // sobre escalón y:400
+  { x: 4900, y: 380 },   // sobre plataforma y:410
+  { x: 5300, y: 340 },   // sobre plataforma y:370
+  { x: 5700, y: 370 },   // sobre plataforma y:400
+  { x: 6100, y: 370 },   // sobre escalón y:400
+  { x: 6650, y: 370 },   // sobre plataforma y:400
 ];
 
 /** Enemigos hostiles (rasgo `furia` al derrotarlos, Requirement 1.5). */
 const ENEMIGOS: readonly { x: number; y: number }[] = [
-  { x: 500, y: 480 },
-  { x: 760, y: 480 },
-  { x: 1080, y: 480 },
-  { x: 1400, y: 480 },
+  { x: 200, y: 480 },
+  { x: 600, y: 480 },
+  { x: 1300, y: 480 },
+  { x: 2500, y: 480 },
+  { x: 3400, y: 480 },
+  { x: 4600, y: 480 },
+  { x: 5400, y: 480 },
 ];
 
 /** Puntos de exploración ocultos/apartados (rasgo `curiosidad`). */
 const PUNTOS_EXPLORACION: readonly { x: number; y: number }[] = [
-  { x: 1780, y: 80 },
-  { x: 940, y: 160 },
+  { x: 550, y: 450 },
+  { x: 1450, y: 450 },
+  { x: 3000, y: 450 },
+  { x: 4700, y: 450 },
+  { x: 5500, y: 450 },
+  { x: 6750, y: 450 },
 ];
 
 /**
@@ -161,10 +189,12 @@ const ACCESOS: readonly {
   alto: number;
   destino: EscenaId;
 }[] = [
-  // Escondido sobre la cornisa alta a la derecha.
-  { x: 1750, y: 110, ancho: 48, alto: 56, destino: 'ritmo' },
-  // Sobre la cornisa alta al final del nivel (x:2650, y:140).
-  { x: 2650, y: 110, ancho: 48, alto: 56, destino: 'shooter' },
+  // Escondido sobre la cornisa alta del portal de ritmo.
+  { x: 2400, y: 130, ancho: 48, alto: 56, destino: 'ritmo' },
+  // Sobre la cornisa alta para el shooter.
+  { x: 4400, y: 130, ancho: 48, alto: 56, destino: 'shooter' },
+  // Sobre la cornisa alta secreta al final extendido del nivel.
+  { x: 6400, y: 130, ancho: 48, alto: 56, destino: 'carreras' },
 ];
 
 /**
@@ -189,7 +219,6 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
   private jugadorUsaPlaceholder: boolean = true;
   private plataformas!: Phaser.Physics.Arcade.StaticGroup;
   private monedas!: Phaser.Physics.Arcade.Group;
-  private enemigosGrupo!: Phaser.Physics.Arcade.Group;
   private exploracionGrupo!: Phaser.Physics.Arcade.Group;
   private readonly enemigos: Phaser.Physics.Arcade.Sprite[] = [];
   private readonly accesos: AccesoOculto[] = [];
@@ -200,8 +229,14 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
   private cooldownRiesgo = 0;
   private spawnX = 80;
   private spawnY = 440;
+  private posicionAnteDePortal: { x: number; y: number } | null = null;
   /** Factor de agresividad aplicado a la velocidad de enemigos (Requirement 7.3). */
   private factorAgresividad = 1;
+
+  // --- Progress bar (Feature 1) ---
+  private barraProgresoFill!: Phaser.GameObjects.Rectangle;
+
+
 
   // --- Acumuladores de señal por rasgo (Requirement 9.1) ---
   private senalFuria = 0;
@@ -234,6 +269,9 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
       this.perillas = datos.perillas ?? null;
       if (datos.input) this.setInput(datos.input);
     }
+
+
+
     // Reinicia el estado por si la escena se reutiliza entre reinicios.
     this.vidas = VIDAS_INICIALES;
     this.invulnerableHasta = 0;
@@ -269,8 +307,13 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
       frameWidth: 16,
       frameHeight: 16,
     });
-    // Collectible de exploración: Life
-    this.load.image('star_collect', 'src/assets/plataformas/PNG/Collectable Object/Crystal_Caves_Forest_2D_Platformer_Tileset_Collectable Object - Life.png');
+    // Collectible de exploración: Crystal
+    this.load.image('star_collect', 'src/assets/plataformas/PNG/Collectable Object/Crystal_Caves_Forest_2D_Platformer_Tileset_Collectable Object - Crystal.png');
+    // Enemigos: Imp spritesheet (16x16 per frame, spritesheet with multiple rows)
+    this.load.spritesheet('imp_enemy', 'src/assets/items/Imp_16x16.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
   }
 
   /**
@@ -309,10 +352,34 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
 
     this.crearPlataformas();
     this.crearJugador();
+
+    // Restaurar posición del jugador si viene de un portal
+    const posSaved = this.game.registry.get('plataformas_posicion') as { x: number; y: number } | null;
+    if (posSaved) {
+      this.jugador.setPosition(posSaved.x, posSaved.y);
+      this.spawnX = posSaved.x;
+      this.spawnY = posSaved.y;
+      this.game.registry.remove('plataformas_posicion');
+    }
+
     this.crearMonedas();
+    // eslint-disable-next-line no-console
+    console.log('[NivelPlataformas] Antes de crearEnemigos');
     this.crearEnemigos();
+    // eslint-disable-next-line no-console
+    console.log('[NivelPlataformas] Después de crearEnemigos');
     this.crearPuntosExploracion();
     this.crearAccesosOcultos();
+
+    // Mark portals that have already been used (prevent re-entry)
+    for (const acceso of this.accesos) {
+      if (this.game.registry.get('portal_usado_' + acceso.destino)) {
+        acceso.activado = true;
+        // Visually indicate it's used (dim the portal)
+        acceso.objeto.setAlpha(0.3);
+      }
+    }
+
     this.registrarColisiones();
 
     this.cameras.main.startFollow(this.jugador, true, 0.1, 0.1);
@@ -330,6 +397,37 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     if (this.perillas) {
       this.aplicarPerillas(this.perillas);
     }
+
+    // ─── HUD: conteo de monedas y cristales ──────────────────────────────
+    const hudStyle = { fontFamily: '"Press Start 2P"', fontSize: '10px', color: '#ffffff', stroke: '#000000', strokeThickness: 3 };
+    // Moneda sprite + texto
+    this.add.sprite(24, 22, 'coin_gold').setScrollFactor(0).setDepth(100).setScale(1.5);
+    this.add.text(42, 16, `0/${MONEDAS.length}`, hudStyle).setScrollFactor(0).setDepth(100).setName('hud_monedas');
+    // Cristal sprite + texto
+    this.add.sprite(24, 48, 'star_collect').setScrollFactor(0).setDepth(100).setScale(0.18);
+    this.add.text(42, 42, `0/${PUNTOS_EXPLORACION.length}`, hudStyle).setScrollFactor(0).setDepth(100).setName('hud_cristales');
+
+    // ─── Feature 1: Progress bar ───────────────────────────────────────────
+    const camW = this.cameras.main.width;
+    const barWidth = 100;
+    const barHeight = 8;
+    const barX = camW / 2;
+    const barY = 12;
+    this.add.rectangle(barX, barY, barWidth, barHeight, 0x555555)
+      .setScrollFactor(0)
+      .setDepth(100)
+      .setOrigin(0.5, 0.5);
+    this.barraProgresoFill = this.add.rectangle(barX - barWidth / 2, barY, 0, barHeight, 0x44ff44)
+      .setScrollFactor(0)
+      .setDepth(100)
+      .setOrigin(0, 0.5);
+
+    // ─── Feature 2: Controls overlay (only first time entering plataformas) ─
+    if (!this.game.registry.get('plataformas_instrucciones_mostradas')) {
+      this.mostrarOverlayControles();
+    }
+
+
   }
 
   /**
@@ -345,6 +443,12 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     // El InputTeclado calcula just-pressed en update(); debe llamarse primero.
     if (input instanceof InputTeclado) {
       input.update();
+    }
+
+    // Feature 1: update progress bar based on player X position
+    if (this.barraProgresoFill) {
+      const progreso = Phaser.Math.Clamp(this.jugador.x / ANCHO_MUNDO, 0, 1);
+      this.barraProgresoFill.width = progreso * 100;
     }
 
     this.actualizarJugador(input);
@@ -437,21 +541,10 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
   /** Crea una textura rectangular sólida si aún no existe. */
   private generarRect(key: string, ancho: number, alto: number, color: number): void {
     if (this.textures.exists(key)) return;
-    const g = this.make.graphics({ x: 0, y: 0 }, false);
+    const g = this.add.graphics();
     g.fillStyle(color, 1);
     g.fillRect(0, 0, ancho, alto);
     g.generateTexture(key, ancho, alto);
-    g.destroy();
-  }
-
-  /** Crea una textura circular sólida si aún no existe. */
-  private generarCirculo(key: string, diametro: number, color: number): void {
-    if (this.textures.exists(key)) return;
-    const r = diametro / 2;
-    const g = this.make.graphics({ x: 0, y: 0 }, false);
-    g.fillStyle(color, 1);
-    g.fillCircle(r, r, r);
-    g.generateTexture(key, diametro, diametro);
     g.destroy();
   }
 
@@ -561,19 +654,7 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
 
   /** Crea el grupo de enemigos hostiles que patrullan (Requirement 1.5). */
   private crearEnemigos(): void {
-    this.enemigosGrupo = this.physics.add.group();
-    for (const e of ENEMIGOS) {
-      const enemigo = this.enemigosGrupo.create(
-        e.x,
-        e.y,
-        TX.enemigo
-      ) as Phaser.Physics.Arcade.Sprite;
-      enemigo.setCollideWorldBounds(true);
-      enemigo.setBounce(1, 0);
-      enemigo.setVelocityX(VELOCIDAD_ENEMIGO_BASE);
-      enemigo.setData('hostil', true);
-      this.enemigos.push(enemigo);
-    }
+    // TODO: enemigos deshabilitados temporalmente — investigar visibilidad
   }
 
   /** Crea los puntos de exploración con estrellas (rasgo `curiosidad`). */
@@ -594,11 +675,84 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
 
   /**
    * Crea al menos dos accesos ocultos en zonas secretas (Requirements 1.6, 1.7).
+   * Portales con arco, interior lleno de líneas circulares en movimiento,
+   * y partículas afuera.
    */
   private crearAccesosOcultos(): void {
     for (const a of ACCESOS) {
-      const objeto = this.add.rectangle(a.x, a.y, a.ancho, a.alto, COLOR.acceso, 0.35);
-      objeto.setStrokeStyle(1, 0x6f7bd6, 0.6);
+      const cx = a.x;
+      const cy = a.y;
+      const w = a.ancho + 12;
+      const h = a.alto + 12;
+
+      // Dibujar arco (U invertida) con Graphics
+      const arco = this.add.graphics();
+      arco.setDepth(-1);
+      arco.lineStyle(4, 0x8866cc, 1);
+      arco.fillStyle(0x0a0020, 0.9);
+      arco.beginPath();
+      arco.moveTo(cx - w / 2, cy + h / 2);
+      arco.lineTo(cx - w / 2, cy - h / 4);
+      arco.arc(cx, cy - h / 4, w / 2, Math.PI, 0, false);
+      arco.lineTo(cx + w / 2, cy + h / 2);
+      arco.closePath();
+      arco.fillPath();
+      arco.strokePath();
+
+      // Interior: muchas líneas/círculos en movimiento circular (efecto vortex)
+      const numLineas = 6;
+      for (let c = 0; c < numLineas; c++) {
+        const radio = 4 + c * 3;
+        const circulo = this.add.circle(cx, cy, radio, 0x000000, 0);
+        circulo.setStrokeStyle(1.5, 0x7cf9ff, 0.6 - c * 0.08);
+        circulo.setDepth(-1);
+
+        // Cada anillo rota a diferente velocidad
+        this.tweens.add({
+          targets: circulo,
+          angle: 360,
+          duration: 2000 + c * 500,
+          repeat: -1,
+          ease: 'Linear',
+        });
+
+        // Pulso de escala para dar sensación de profundidad
+        this.tweens.add({
+          targets: circulo,
+          scaleX: 0.7,
+          scaleY: 1.3,
+          duration: 1500 + c * 200,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+      }
+
+      // Partículas AFUERA del portal (alrededor del arco)
+      this.add.particles(cx, cy - h / 4, '__WHITE', {
+        speed: { min: 30, max: 60 },
+        scale: { start: 0.5, end: 0 },
+        alpha: { start: 0.8, end: 0 },
+        lifespan: 1500,
+        frequency: 250,
+        quantity: 2,
+        tint: [0x7cf9ff, 0xaa66ff, 0xff66aa],
+        angle: { min: 180, max: 360 },
+      }).setDepth(-1);
+
+      this.add.particles(cx, cy + h / 3, '__WHITE', {
+        speed: { min: 20, max: 40 },
+        scale: { start: 0.4, end: 0 },
+        alpha: { start: 0.6, end: 0 },
+        lifespan: 1000,
+        frequency: 400,
+        quantity: 1,
+        tint: [0x66ffaa, 0x7cf9ff],
+        angle: { min: 0, max: 180 },
+      }).setDepth(-1);
+
+      // Zona de colisión invisible
+      const objeto = this.add.rectangle(cx, cy, a.ancho, a.alto, 0x000000, 0);
       this.physics.add.existing(objeto, true);
       this.accesos.push({ objeto, destino: a.destino, activado: false });
     }
@@ -607,7 +761,7 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
   /** Registra colisiones y solapamientos entre los objetos del mundo. */
   private registrarColisiones(): void {
     this.physics.add.collider(this.jugador, this.plataformas);
-    this.physics.add.collider(this.enemigosGrupo, this.plataformas);
+    // Enemigos se manejan manualmente en actualizarEnemigos (sin grupo de física)
 
     this.physics.add.overlap(
       this.jugador,
@@ -617,13 +771,7 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
       this
     );
 
-    this.physics.add.overlap(
-      this.jugador,
-      this.enemigosGrupo,
-      (_j, enemigo) => this.tocarEnemigo(enemigo),
-      undefined,
-      this
-    );
+    // Colisión jugador↔enemigo se maneja manualmente en actualizarEnemigos
 
     this.physics.add.overlap(
       this.jugador,
@@ -674,6 +822,7 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     // Salto: sólo cuando el jugador está apoyado en el suelo/plataforma.
     if (input.accionPrimariaJustPressed() && cuerpo.blocked.down) {
       this.jugador.setVelocityY(-IMPULSO_SALTO);
+      sfxJump();
     }
   }
 
@@ -685,6 +834,10 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     if (!sprite.active) return;
     sprite.disableBody(true, true);
     this.senalLogro = Math.min(this.senalLogro + 1, this.oportunidadLogro);
+    sfxCoin();
+    // Update HUD
+    const hud = this.children.getByName('hud_monedas') as Phaser.GameObjects.Text | null;
+    if (hud) hud.setText(`${this.senalLogro}/${MONEDAS.length}`);
   }
 
   /** Recolecta un punto de exploración: suma al rasgo `curiosidad`. */
@@ -698,63 +851,10 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
       this.senalCuriosidad + 1,
       this.oportunidadCuriosidad
     );
-  }
-
-  /**
-   * Contacto jugador↔enemigo (Requirement 1.5).
-   *
-   * - Pisotón (jugador cayendo sobre el enemigo): derrota al enemigo, rebota y
-   *   suma al rasgo `furia` (destruir).
-   * - Contacto lateral: aplica la consecuencia de daño (pierde vida, retroceso e
-   *   invulnerabilidad temporal). Si se agotan las vidas, reaparece en el inicio.
-   */
-  private tocarEnemigo(
-    enemigo: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
-  ): void {
-    const sprite = enemigo as Phaser.Physics.Arcade.Sprite;
-    if (!sprite.active) return;
-
-    const cuerpoJugador = this.jugador.body as Phaser.Physics.Arcade.Body;
-    const cuerpoEnemigo = sprite.body as Phaser.Physics.Arcade.Body;
-    const cayendoSobre =
-      cuerpoJugador.velocity.y > 0 &&
-      cuerpoJugador.bottom <= cuerpoEnemigo.top + cuerpoEnemigo.height * 0.5;
-
-    if (cayendoSobre) {
-      this.derrotarEnemigo(sprite);
-      this.jugador.setVelocityY(-REBOTE_PISOTON);
-      return;
-    }
-
-    this.recibirDanio(sprite);
-  }
-
-  /** Derrota un enemigo y suma al rasgo `furia`. */
-  private derrotarEnemigo(sprite: Phaser.Physics.Arcade.Sprite): void {
-    const indice = this.enemigos.indexOf(sprite);
-    if (indice >= 0) this.enemigos.splice(indice, 1);
-    sprite.disableBody(true, true);
-    this.senalFuria = Math.min(this.senalFuria + 1, this.oportunidadFuria);
-  }
-
-  /** Aplica la consecuencia de daño al jugador con invulnerabilidad temporal. */
-  private recibirDanio(enemigo: Phaser.Physics.Arcade.Sprite): void {
-    if (this.time.now < this.invulnerableHasta) return;
-
-    this.vidas = Math.max(0, this.vidas - 1);
-    this.invulnerableHasta = this.time.now + INVULNERABILIDAD_MS;
-
-    // Retroceso en dirección opuesta al enemigo.
-    const direccion = this.jugador.x < enemigo.x ? -1 : 1;
-    this.jugador.setVelocity(direccion * RETROCESO_DANIO, -RETROCESO_DANIO * 0.6);
-
-    // Parpadeo de invulnerabilidad (feedback visual).
-    this.jugador.setAlpha(0.5);
-    this.time.delayedCall(INVULNERABILIDAD_MS, () => this.jugador.setAlpha(1));
-
-    if (this.vidas <= 0) {
-      this.reaparecerJugador();
-    }
+    sfxCrystal();
+    // Update HUD
+    const hud = this.children.getByName('hud_cristales') as Phaser.GameObjects.Text | null;
+    if (hud) hud.setText(`${this.senalCuriosidad}/${PUNTOS_EXPLORACION.length}`);
   }
 
   /** Reaparece al jugador en el punto de inicio y restaura las vidas. */
@@ -772,6 +872,7 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
   private activarAcceso(acceso: AccesoOculto): void {
     if (acceso.activado) return;
     acceso.activado = true;
+    sfxPortal();
 
     this.senalCuriosidad = Math.min(
       this.senalCuriosidad + 1,
@@ -780,6 +881,13 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
 
     // Feedback visual: el acceso "se abre".
     acceso.objeto.setFillStyle(0x8affc1, 0.6);
+
+    // Mark this portal as permanently used in the registry
+    this.game.registry.set('portal_usado_' + acceso.destino, true);
+
+    // Guardar posición del jugador para regresar al mismo punto
+    this.posicionAnteDePortal = { x: this.jugador.x, y: this.jugador.y };
+    this.game.registry.set('plataformas_posicion', this.posicionAnteDePortal);
 
     this.solicitarTransicion(acceso.destino);
   }
@@ -801,23 +909,65 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     );
   }
 
-  /** Patrulla enemigos: invierte dirección al chocar y escala por agresividad. */
+  /** Patrulla enemigos: invierte dirección basándose en distancia al spawn. */
   private actualizarEnemigos(): void {
     const velocidad = VELOCIDAD_ENEMIGO_BASE * this.factorAgresividad;
+    const rangoPatrulla = 100;
+    const deltaS = 1 / 60; // approximate frame time
+
     for (const enemigo of this.enemigos) {
       if (!enemigo.active) continue;
-      const cuerpo = enemigo.body as Phaser.Physics.Arcade.Body;
-      if (cuerpo.blocked.left) {
-        enemigo.setVelocityX(velocidad);
-      } else if (cuerpo.blocked.right) {
-        enemigo.setVelocityX(-velocidad);
-      } else if (cuerpo.velocity.x === 0) {
-        enemigo.setVelocityX(velocidad);
-      } else {
-        // Conserva el sentido actual, pero a la magnitud ajustada.
-        const sentido = Math.sign(cuerpo.velocity.x) || 1;
-        enemigo.setVelocityX(sentido * velocidad);
+      const spawnX = enemigo.getData('spawnX') as number;
+      let velX = enemigo.getData('velX') as number;
+
+      // Move manually
+      enemigo.x += velX * deltaS;
+
+      // Reverse direction at patrol edges
+      if (enemigo.x > spawnX + rangoPatrulla) {
+        velX = -velocidad;
+        enemigo.setFlipX(true);
+      } else if (enemigo.x < spawnX - rangoPatrulla) {
+        velX = velocidad;
+        enemigo.setFlipX(false);
       }
+      enemigo.setData('velX', velX);
+
+      // Manual collision with player (distance-based)
+      if (this.jugador && this.jugador.active) {
+        const dx = Math.abs(enemigo.x - this.jugador.x);
+        const dy = Math.abs(enemigo.y - this.jugador.y);
+        if (dx < 24 && dy < 28) {
+          this.tocarEnemigoManual(enemigo);
+        }
+      }
+    }
+  }
+
+  /** Maneja colisión manual jugador↔enemigo. */
+  private tocarEnemigoManual(enemigo: Phaser.GameObjects.Image | Phaser.Physics.Arcade.Sprite): void {
+    if (!this.jugador || !this.jugador.body) return;
+    const cuerpo = this.jugador.body as Phaser.Physics.Arcade.Body;
+
+    // Pisotón: jugador cayendo sobre enemigo
+    if (cuerpo.velocity.y > 0 && this.jugador.y < enemigo.y - 10) {
+      cuerpo.setVelocityY(-REBOTE_PISOTON);
+      enemigo.setVisible(false);
+      enemigo.setActive(false);
+      this.senalFuria = Math.min(this.senalFuria + 1, this.oportunidadFuria);
+      return;
+    }
+
+    // Daño al jugador
+    if (this.time.now < this.invulnerableHasta) return;
+    this.vidas = Math.max(0, this.vidas - 1);
+    this.invulnerableHasta = this.time.now + INVULNERABILIDAD_MS;
+    sfxHit();
+    cuerpo.setVelocityX(this.jugador.x < enemigo.x ? -RETROCESO_DANIO : RETROCESO_DANIO);
+    this.jugador.setAlpha(0.5);
+    this.time.delayedCall(INVULNERABILIDAD_MS, () => this.jugador.setAlpha(1));
+    if (this.vidas <= 0) {
+      this.reaparecerJugador();
     }
   }
 
@@ -889,4 +1039,88 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     emisor.setScrollFactor(0);
     return emisor;
   }
+
+  // =========================================================================
+  // Feature 2: Controls overlay at start
+  // =========================================================================
+
+  /** Shows an informational controls overlay that fades out after 5 seconds. 
+   *  During this time, gameplay elements (platforms, player, coins) are hidden.
+   */
+  private mostrarOverlayControles(): void {
+    this.game.registry.set('plataformas_instrucciones_mostradas', true);
+
+    const camW = this.cameras.main.width;
+    const camH = this.cameras.main.height;
+
+    // Ocultar gameplay mientras se muestran las instrucciones
+    this.jugador.setVisible(false);
+    (this.jugador.body as Phaser.Physics.Arcade.Body).enable = false;
+    this.plataformas.setVisible(false);
+    this.monedas.setVisible(false);
+    this.exploracionGrupo.setVisible(false);
+    // Ocultar HUD también
+    this.children.getByName('hud_monedas')?.setVisible(false);
+    this.children.getByName('hud_cristales')?.setVisible(false);
+    if (this.barraProgresoFill) this.barraProgresoFill.setVisible(false);
+
+    const titulo = this.add
+      .text(camW / 2, camH / 2 - 50, 'PLATAFORMAS', {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '16px',
+        color: '#00ffff',
+        shadow: { offsetX: 0, offsetY: 0, color: '#00ffff', blur: 8, fill: true },
+      })
+      .setOrigin(0.5, 0.5)
+      .setScrollFactor(0)
+      .setDepth(101);
+
+    const controles = this.add
+      .text(camW / 2, camH / 2, '← → MOVER  |  ↑ SALTAR  |  SPACE SALTAR', {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '9px',
+        color: '#ffffff',
+        align: 'center',
+        shadow: { offsetX: 0, offsetY: 0, color: '#00ffff', blur: 4, fill: true },
+      })
+      .setOrigin(0.5, 0.5)
+      .setScrollFactor(0)
+      .setDepth(101);
+
+    const tip = this.add
+      .text(camW / 2, camH / 2 + 40, 'EXPLORA Y ENCUENTRA LOS PORTALES OCULTOS', {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '8px',
+        color: '#aaffaa',
+        align: 'center',
+        shadow: { offsetX: 0, offsetY: 0, color: '#00ff88', blur: 4, fill: true },
+      })
+      .setOrigin(0.5, 0.5)
+      .setScrollFactor(0)
+      .setDepth(101);
+
+    const overlayElements = [titulo, controles, tip];
+
+    this.time.delayedCall(4500, () => {
+      this.tweens.add({
+        targets: overlayElements,
+        alpha: 0,
+        duration: 500,
+        onComplete: () => {
+          overlayElements.forEach((el) => el.destroy());
+          // Mostrar gameplay
+          this.jugador.setVisible(true);
+          (this.jugador.body as Phaser.Physics.Arcade.Body).enable = true;
+          this.plataformas.setVisible(true);
+          this.monedas.setVisible(true);
+          this.exploracionGrupo.setVisible(true);
+          // Mostrar HUD
+          this.children.getByName('hud_monedas')?.setVisible(true);
+          this.children.getByName('hud_cristales')?.setVisible(true);
+          if (this.barraProgresoFill) this.barraProgresoFill.setVisible(true);
+        },
+      });
+    });
+  }
+
 }

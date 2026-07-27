@@ -154,6 +154,7 @@ function crearSesionDoble(): IAlmacenSesion {
 
 /** Registro de prueba: plataformas + ritmo habilitadas (shooter también, útil). */
 const REGISTRO_PRUEBA: RegistroEscena[] = [
+  { id: 'portada', crear: () => crearEscenaDoble('portada'), habilitada: true },
   { id: 'seleccion_personaje', crear: () => crearEscenaDoble('seleccion_personaje'), habilitada: true },
   { id: 'plataformas', crear: () => crearEscenaDoble('plataformas'), habilitada: true },
   { id: 'ritmo', crear: () => crearEscenaDoble('ritmo'), habilitada: true },
@@ -295,10 +296,10 @@ describe('Shell loop — integración end-to-end (backend mockeado)', () => {
     const { sm, llamadas } = crearEntorno(fetchQueResponde(perillasRemotas));
     sm.registrarEscenas();
 
-    // Arranca la primera Escena (seleccion_personaje) con perillas resueltas y SIN carga
+    // Arranca la primera Escena (portada) con perillas resueltas y SIN carga
     // (el arranque inicial no es una transición solicitada, Requirement 8.2).
     await sm.iniciar();
-    expect(llamadas.some((l) => l.metodo === 'start' && l.clave === 'seleccion_personaje')).toBe(true);
+    expect(llamadas.some((l) => l.metodo === 'start' && l.clave === 'portada')).toBe(true);
     expect(
       llamadas.some((l) => l.metodo === 'start' && l.clave === ID_CARGA)
     ).toBe(false);

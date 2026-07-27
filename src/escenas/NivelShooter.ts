@@ -40,14 +40,15 @@ import {
   crearCapaClima,
   asegurarTexturaParticula,
 } from '../mutacion';
+import { sfxShoot, sfxHit } from '../audio/sfx';
 import { CLAVE_PERSONAJE } from './EscenaSeleccion';
 
 /** Duración mínima de la sesión (Requirement 3.1), en milisegundos. */
-const DURACION_MIN_MS = 60_000;
+const DURACION_MIN_MS = 30_000;
 /** Duración máxima de la sesión (Requirement 3.1), en milisegundos. */
-const DURACION_MAX_MS = 90_000;
-/** Duración por defecto si no se configura otra (dentro de `[60000,90000]`). */
-const DURACION_DEFECTO_MS = 75_000;
+const DURACION_MAX_MS = 50_000;
+/** Duración por defecto si no se configura otra (dentro de `[30000,50000]`). */
+const DURACION_DEFECTO_MS = 40_000;
 
 /** Velocidad de desplazamiento de la mira, en píxeles por segundo. */
 const VELOCIDAD_MIRA = 420;
@@ -92,10 +93,10 @@ interface ObjetivoActivo {
 
 /**
  * Opciones de construcción del {@link NivelShooter} (principalmente para tests
- * y ajustes finos). La duración se acota siempre a `[60000, 90000]`.
+ * y ajustes finos). La duración se acota siempre a `[30000, 50000]`.
  */
 export interface NivelShooterOpciones {
-  /** Duración de la sesión en ms; se acota a `[60000, 90000]` (Requirement 3.1). */
+  /** Duración de la sesión en ms; se acota a `[30000, 50000]` (Requirement 3.1). */
   duracionMs?: number;
 }
 
@@ -107,7 +108,7 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
   /** Identidad lógica de la Escena (Requirement 9). */
   readonly id = 'shooter' as const;
 
-  /** Duración efectiva de la sesión, acotada a `[60000, 90000]` (Requirement 3.1). */
+  /** Duración efectiva de la sesión, acotada a `[30000, 50000]` (Requirement 3.1). */
   private readonly duracionMs: number;
 
   /** Fachada del Shell; puede faltar hasta el cableado (Task 11). */
@@ -175,7 +176,7 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
   }
 
   /**
-   * Acota una duración propuesta al rango válido `[60000, 90000]` ms
+   * Acota una duración propuesta al rango válido `[30000, 50000]` ms
    * (Requirement 3.1).
    */
   private static acotarDuracion(ms: number): number {
@@ -503,7 +504,7 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
     this.add.text(width - 140, 128, 'DINAMITAS', labelStyle).setScrollFactor(0).setDepth(100);
     this.add.text(width - 140, 140, '000', { fontFamily: '"Press Start 2P"', fontSize: '13px', color: '#ff4444', shadow: { offsetX: 0, offsetY: 0, color: '#ff0000', blur: 4, fill: true } }).setScrollFactor(0).setDepth(100).setName('hud_bombas');
     this.add.text(width - 140, 168, 'TIEMPO', labelStyle).setScrollFactor(0).setDepth(100);
-    this.add.text(width - 140, 180, '01:15', valStyle).setScrollFactor(0).setDepth(100).setName('hud_tiempo');
+    this.add.text(width - 140, 180, '00:40', valStyle).setScrollFactor(0).setDepth(100).setName('hud_tiempo');
   }
 
   /** Personaje decorativo en la esquina inferior izquierda. */
@@ -688,6 +689,7 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
     if (!this.inputUnificado.accionPrimariaJustPressed()) return;
 
     this.disparos += 1;
+    sfxShoot();
     this.mostrarDestelloDisparo(this.mira.x, this.mira.y);
     this.resolverImpacto(this.mira.x, this.mira.y);
   }
@@ -719,6 +721,7 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
       // Impacto confirmado (Requirement 3.4).
       this.impactos += 1;
       this.objetivosDestruidos += 1;
+      sfxHit();
 
       // Quick-draw: destruido apenas apareció → señal de riesgo.
       const vida = this.time.now - objetivo.aparicionMs;
@@ -810,18 +813,28 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
 
   /**
    * Programa la aparición periódica de objetivos. El intervalo se acorta con la
-   * intensidad (más densidad → aparición más frecuente, Requirement 7.2).
+   * intensidad (más densidad → aparición más frecuente, Requirement 7.2) y
+   * también se acorta con el tiempo transcurrido (más presión conforme avanza).
    */
   private programarSpawn(): void {
     this.timerSpawn?.remove(false);
     // Intensidad alta → intervalo más corto (mínimo 250 ms).
     const factor = 1 - Phaser.Math.Clamp(this.intensidad, 0, 1) * 0.7;
-    const intervalo = Math.max(250, INTERVALO_SPAWN_BASE_MS * factor);
+    // Factor temporal: el intervalo se reduce progresivamente según el tiempo transcurrido.
+    const tiempoTranscurrido = this.timerFin
+      ? this.duracionMs - this.timerFin.getRemaining()
+      : 0;
+    const factorTemporal = 1 + tiempoTranscurrido / this.duracionMs; // 1 al inicio, ~2 al final
+    const intervalo = Math.max(250, (INTERVALO_SPAWN_BASE_MS * factor) / factorTemporal);
 
     this.timerSpawn = this.time.addEvent({
       delay: intervalo,
-      loop: true,
-      callback: () => this.aparecerObjetivo(),
+      loop: false,
+      callback: () => {
+        this.aparecerObjetivo();
+        // Re-programa con un intervalo potencialmente más corto.
+        if (!this.terminado) this.programarSpawn();
+      },
     });
   }
 
@@ -965,20 +978,60 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
     this.timerSpawn?.remove(false);
     this.timerFin?.remove(false);
 
-    const telemetria = this.construirTelemetria();
+    this.mostrarResultadosYSalir();
+  }
 
-    if (this.shell) {
-      // Reporta la telemetría y solicita el retorno (Requirements 3.5, 3.7, 8.3).
-      this.shell.reportarTelemetria(telemetria);
-      this.shell.solicitarTransicion('plataformas');
-    } else {
-      // Sin Shell aún: registra la transición en vez de fallar (Task 11).
-      // eslint-disable-next-line no-console
-      console.info(
-        '[NivelShooter] sesión finalizada; retorno a "plataformas" (Shell no cableado).',
-        telemetria
-      );
-    }
+  /**
+   * Shows a results overlay on top of the frozen game state for 3 seconds,
+   * then reports telemetry and transitions back to plataformas.
+   */
+  private mostrarResultadosYSalir(): void {
+    const w = this.scale.width;
+    const h = this.scale.height;
+
+    // Semi-transparent dark overlay
+    const bg = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.7);
+    bg.setScrollFactor(0).setDepth(100);
+
+    const telemetria = this.construirTelemetria();
+    const rasgos = telemetria.porRasgo;
+
+    this.add.text(w / 2, h * 0.3, `NIVEL SHOOTER\nCOMPLETADO!`, {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '14px',
+      color: '#ffd700',
+      align: 'center',
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(101);
+
+    const lines = [
+      `FURIA: ${rasgos.furia.senal}/${rasgos.furia.oportunidad}`,
+      `CURIOSIDAD: ${rasgos.curiosidad.senal}/${rasgos.curiosidad.oportunidad}`,
+      `LOGRO: ${rasgos.logro.senal}/${rasgos.logro.oportunidad}`,
+      `RIESGO: ${rasgos.riesgo.senal}/${rasgos.riesgo.oportunidad}`,
+    ].join('\n');
+
+    this.add.text(w / 2, h * 0.55, lines, {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '9px',
+      color: '#ffffff',
+      align: 'center',
+      lineSpacing: 8,
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(101);
+
+    // Wait 3 seconds then transition
+    this.time.delayedCall(3000, () => {
+      if (this.shell) {
+        this.shell.reportarTelemetria(telemetria);
+        this.shell.solicitarTransicion('plataformas');
+      } else {
+        // eslint-disable-next-line no-console
+        console.info('[NivelShooter] sesión finalizada; retorno a "plataformas" (Shell no cableado).', telemetria);
+      }
+    });
   }
 
   /**

@@ -8,7 +8,7 @@
  *
  * Cobertura de requisitos:
  * - **Requirement 2.1**: la sesión dura entre 60 y 90 segundos
- *   ({@link NivelRitmo.duracionMs} acotada a `[60000, 90000]`), gobernada por el
+ *   ({@link NivelRitmo.duracionMs} acotada a `[30000, 50000]`), gobernada por el
  *   tiempo de la escena.
  * - **Requirement 2.2**: pulsar la acción primaria dentro de la ventana de
  *   acierto de un beat registra un ACIERTO.
@@ -45,14 +45,15 @@ import {
   OverlayTextoPhaser,
   crearCapaClima,
 } from '../mutacion';
+import { sfxRhythmHit, sfxRhythmMiss } from '../audio/sfx';
 import { CLAVE_PERSONAJE } from './EscenaSeleccion';
 
 /** Duración mínima de la sesión en ms (Requirement 2.1). */
-const DURACION_MIN_MS = 60000;
+const DURACION_MIN_MS = 30000;
 /** Duración máxima de la sesión en ms (Requirement 2.1). */
-const DURACION_MAX_MS = 90000;
-/** Duración por defecto en ms, dentro del rango `[60000, 90000]`. */
-const DURACION_DEFECTO_MS = 75000;
+const DURACION_MAX_MS = 50000;
+/** Duración por defecto en ms, dentro del rango `[30000, 50000]`. */
+const DURACION_DEFECTO_MS = 40000;
 
 /** Intervalo entre beats consecutivos (~100 BPM). */
 const INTERVALO_BEAT_MS = 600;
@@ -112,6 +113,8 @@ interface Beat {
   tiempoObjetivo: number;
   /** `true` cuando ya fue acertada o se dio por perdida (no se re-evalúa). */
   juzgada: boolean;
+  /** Offset X aleatorio dentro del carril para esta nota. */
+  offsetX: number;
 }
 
 /**
@@ -124,7 +127,7 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
   /** Identidad lógica de la escena (Contrato_Compartido). */
   readonly id: EscenaId = 'ritmo';
 
-  /** Duración de la sesión, acotada a `[60000, 90000]` ms (Requirement 2.1). */
+  /** Duración de la sesión, acotada a `[30000, 50000]` ms (Requirement 2.1). */
   private readonly duracionMs: number;
 
   /** Instantes objetivo de cada beat (deterministas a partir de la duración). */
@@ -171,7 +174,7 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
 
   /**
    * @param duracionMs Duración deseada de la sesión; se acota al rango válido
-   *   `[60000, 90000]` (Requirement 2.1). Por defecto {@link DURACION_DEFECTO_MS}.
+   *   `[30000, 50000]` (Requirement 2.1). Por defecto {@link DURACION_DEFECTO_MS}.
    */
   constructor(duracionMs: number = DURACION_DEFECTO_MS) {
     super({ key: 'ritmo' });
@@ -393,14 +396,21 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
   // ---------------------------------------------------------------------------
 
   /**
-   * Genera los instantes objetivo de los beats de forma determinista a partir de
-   * la duración de la sesión.
+   * Genera los instantes objetivo de los beats con intervalo decreciente:
+   * comienza con INTERVALO_BEAT_MS y se acorta progresivamente hacia el final
+   * de la sesión (las notas caen cada vez más rápido).
    */
   private generarTiemposBeat(): number[] {
     const tiempos: number[] = [];
     const limite = this.duracionMs - MARGEN_FINAL_MS;
-    for (let t = PRIMER_BEAT_MS; t <= limite; t += INTERVALO_BEAT_MS) {
+    let t = PRIMER_BEAT_MS;
+    while (t <= limite) {
       tiempos.push(t);
+      // Factor de velocidad: 1 al inicio, hasta ~2 al final de la sesión.
+      const progreso = t / this.duracionMs;
+      const factorVelocidad = 1 + progreso;
+      const intervaloActual = INTERVALO_BEAT_MS / factorVelocidad;
+      t += intervaloActual;
     }
     return tiempos;
   }
@@ -814,24 +824,30 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
     const notasCargadas = NOTAS_KEYS.filter(k => this.textures.exists(k));
     const usarNotas = notasCargadas.length > 0;
 
+    // Ancho del carril para randomizar posiciones.
+    const anchoCarril = 340;
+
     this.beats = this.tiemposBeat.map((tiempoObjetivo, i) => {
+      // Posición X aleatoria dentro del carril.
+      const offsetX = (Math.random() - 0.5) * (anchoCarril - 60);
+
       let sprite: Phaser.GameObjects.Sprite;
       if (usarNotas) {
         const key = notasCargadas[i % notasCargadas.length] as string;
         sprite = this.add
-          .sprite(this.laneX, this.spawnY, key)
+          .sprite(this.laneX + offsetX, this.spawnY, key)
           .setDisplaySize(40, 40)
           .setVisible(false);
       } else {
         // Fallback al placeholder si ninguna nota cargó.
         sprite = this.add
-          .sprite(this.laneX, this.spawnY, KEY_TEXTURA)
+          .sprite(this.laneX + offsetX, this.spawnY, KEY_TEXTURA)
           .setDisplaySize(30, 30)
           .setTint(0xffffff)
           .setVisible(false);
       }
       sprite.setDepth(10);
-      return { sprite, tiempoObjetivo, juzgada: false };
+      return { sprite, tiempoObjetivo, juzgada: false, offsetX };
     });
   }
 
@@ -865,7 +881,7 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
 
     // TIEMPO
     this.add.text(20, 132, 'TIEMPO', labelStyle).setScrollFactor(0).setDepth(1000);
-    this.hudTiempo = this.add.text(20, 144, '01:15', valorStyle).setScrollFactor(0).setDepth(1000);
+    this.hudTiempo = this.add.text(20, 144, '00:40', valorStyle).setScrollFactor(0).setDepth(1000);
   }
 
   /**
@@ -956,9 +972,9 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
       beat.sprite.setVisible(true);
       beat.sprite.y = this.spawnY + (this.hitLineY - this.spawnY) * progreso;
 
-      // Oscilación lateral suave (wobble) mientras cae.
-      const wobble = Math.sin(transcurrido * 0.004 + beat.tiempoObjetivo) * 8;
-      beat.sprite.x = this.laneX + wobble;
+      // Posición X aleatoria preasignada + oscilación lateral suave (wobble).
+      const wobble = Math.sin(transcurrido * 0.004 + beat.tiempoObjetivo) * 6;
+      beat.sprite.x = this.laneX + beat.offsetX + wobble;
 
       // Rotación sutil.
       beat.sprite.rotation = Math.sin(transcurrido * 0.003 + beat.tiempoObjetivo) * 0.15;
@@ -1021,11 +1037,13 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
       this.efectoAcierto(mejor.sprite.x, mejor.sprite.y);
       // Reacción del personaje decorativo al acertar.
       this.reaccionPersonajeAcierto();
+      sfxRhythmHit();
     } else {
       // Pulsación fuera de la ventana de todo beat (Requirement 2.3).
       this.fallos += 1;
       // Flash rojo sutil en la línea al fallar.
       this.efectoFallo();
+      sfxRhythmMiss();
     }
   }
 
@@ -1103,18 +1121,59 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
     if (this.finalizado) return;
     this.finalizado = true;
 
-    const telemetria = this.construirTelemetria();
+    this.mostrarResultadosYSalir();
+  }
 
-    if (this.shell) {
-      this.shell.reportarTelemetria(telemetria);
-      this.shell.solicitarTransicion('plataformas');
-    } else {
-      // Degradación con gracia sin Shell (Task 11 cableará el Shell real).
-      // eslint-disable-next-line no-console
-      console.info(
-        '[NivelRitmo] Sin Shell: retorno a plataformas.',
-        telemetria
-      );
-    }
+  /**
+   * Shows a results overlay on top of the frozen game state for 3 seconds,
+   * then reports telemetry and transitions back to plataformas.
+   */
+  private mostrarResultadosYSalir(): void {
+    const w = this.scale.width;
+    const h = this.scale.height;
+
+    // Semi-transparent dark overlay
+    const bg = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.7);
+    bg.setScrollFactor(0).setDepth(100);
+
+    const telemetria = this.construirTelemetria();
+    const rasgos = telemetria.porRasgo;
+
+    this.add.text(w / 2, h * 0.3, `NIVEL RITMO\nCOMPLETADO!`, {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '14px',
+      color: '#ffd700',
+      align: 'center',
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(101);
+
+    const lines = [
+      `FURIA: ${rasgos.furia.senal}/${rasgos.furia.oportunidad}`,
+      `CURIOSIDAD: ${rasgos.curiosidad.senal}/${rasgos.curiosidad.oportunidad}`,
+      `LOGRO: ${rasgos.logro.senal}/${rasgos.logro.oportunidad}`,
+      `RIESGO: ${rasgos.riesgo.senal}/${rasgos.riesgo.oportunidad}`,
+    ].join('\n');
+
+    this.add.text(w / 2, h * 0.55, lines, {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '9px',
+      color: '#ffffff',
+      align: 'center',
+      lineSpacing: 8,
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(101);
+
+    // Wait 3 seconds then transition
+    this.time.delayedCall(3000, () => {
+      if (this.shell) {
+        this.shell.reportarTelemetria(telemetria);
+        this.shell.solicitarTransicion('plataformas');
+      } else {
+        // eslint-disable-next-line no-console
+        console.info('[NivelRitmo] Sin Shell: retorno a plataformas.', telemetria);
+      }
+    });
   }
 }

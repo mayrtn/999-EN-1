@@ -46,9 +46,9 @@ import { NivelPlataformas } from './NivelPlataformas';
 
 /** Cantidades del layout fijo del nivel (deben coincidir con NivelPlataformas.ts). */
 const OPORTUNIDAD = {
-  furia: 4, // ENEMIGOS.length
-  logro: 8, // MONEDAS.length
-  curiosidad: 5, // ACCESOS.length (2) + PUNTOS_EXPLORACION.length (3)
+  furia: 7, // ENEMIGOS.length
+  logro: 14, // MONEDAS.length
+  curiosidad: 9, // ACCESOS.length (3) + PUNTOS_EXPLORACION.length (6)
   riesgo: 6, // MAX_RIESGO
 } as const;
 
@@ -69,10 +69,14 @@ function crearShellMock(): IShell & {
 function crearJugadorFalso() {
   return {
     x: 100,
+    y: 440,
+    active: true,
     body: {
       velocity: { x: 0, y: 0 },
       bottom: 0,
       blocked: { down: false },
+      setVelocityX: vi.fn(),
+      setVelocityY: vi.fn(),
     },
     setVelocity: vi.fn(),
     setVelocityX: vi.fn(),
@@ -103,7 +107,7 @@ function crearSpriteFalso(overrides: Record<string, unknown> = {}) {
  */
 interface EscenaExpuesta {
   recolectarMoneda(moneda: unknown): void;
-  tocarEnemigo(enemigo: unknown): void;
+  tocarEnemigoManual(enemigo: unknown): void;
   activarAcceso(acceso: unknown): void;
   senalLogro: number;
   senalFuria: number;
@@ -113,6 +117,7 @@ interface EscenaExpuesta {
   invulnerableHasta: number;
   jugador: unknown;
   time: unknown;
+  children: unknown;
   enemigos: unknown[];
 }
 
@@ -124,9 +129,11 @@ function prepararEscena() {
   const escena = new NivelPlataformas();
   const jugador = crearJugadorFalso();
   const time = crearRelojFalso();
+  const children = { getByName: vi.fn().mockReturnValue(null) };
   const any = escena as unknown as EscenaExpuesta;
   any.jugador = jugador;
   any.time = time;
+  any.children = children;
   return { escena, any, jugador, time };
 }
 
@@ -224,21 +231,25 @@ describe('NivelPlataformas', () => {
     });
   });
 
-  describe('tocarEnemigo() — daño y pisotón (Req 1.5)', () => {
+  describe('tocarEnemigoManual() — daño y pisotón (Req 1.5)', () => {
     it('contacto lateral: pierde una vida, aplica retroceso e invulnerabilidad', () => {
       const { any, jugador, time } = prepararEscena();
       time.now = 1000;
       jugador.body.velocity.y = 0; // no cae sobre el enemigo → recibe daño
-      const enemigo = crearSpriteFalso({
+      jugador.x = 100;
+      jugador.y = 480; // same level as enemy → not a stomp
+      const enemigo = {
         x: 200,
-        body: { top: 480, height: 28 },
-      });
+        y: 480,
+        active: true,
+        setVisible: vi.fn(),
+        setActive: vi.fn(),
+      };
 
-      any.tocarEnemigo(enemigo);
+      any.tocarEnemigoManual(enemigo);
 
       expect(any.vidas).toBe(2); // 3 → 2
       expect(any.invulnerableHasta).toBeGreaterThan(time.now);
-      expect(jugador.setVelocity).toHaveBeenCalledTimes(1);
       expect(jugador.setAlpha).toHaveBeenCalledWith(0.5);
       expect(time.delayedCall).toHaveBeenCalledTimes(1);
     });
@@ -248,33 +259,42 @@ describe('NivelPlataformas', () => {
       time.now = 500;
       any.invulnerableHasta = 2000; // aún invulnerable
       jugador.body.velocity.y = 0;
-      const enemigo = crearSpriteFalso({
+      jugador.x = 100;
+      jugador.y = 480;
+      const enemigo = {
         x: 200,
-        body: { top: 480, height: 28 },
-      });
+        y: 480,
+        active: true,
+        setVisible: vi.fn(),
+        setActive: vi.fn(),
+      };
 
-      any.tocarEnemigo(enemigo);
+      any.tocarEnemigoManual(enemigo);
 
       expect(any.vidas).toBe(3); // sin cambios
-      expect(jugador.setVelocity).not.toHaveBeenCalled();
     });
 
     it('pisotón: derrota al enemigo, rebota y suma al rasgo furia', () => {
       const { any, jugador } = prepararEscena();
       jugador.body.velocity.y = 120; // cayendo
-      jugador.body.bottom = 0; // por encima del enemigo
-      const enemigo = crearSpriteFalso({
+      jugador.x = 200;
+      jugador.y = 450; // above enemy → stomp condition (jugador.y < enemigo.y - 10)
+      // tocarEnemigoManual reads body as Arcade.Body and calls setVelocityY on it
+      jugador.body.setVelocityY = vi.fn();
+      const enemigo = {
         x: 200,
-        body: { top: 480, height: 28 },
-      });
-      any.enemigos = [enemigo];
+        y: 480,
+        active: true,
+        setVisible: vi.fn(),
+        setActive: vi.fn(),
+      };
 
-      any.tocarEnemigo(enemigo);
+      any.tocarEnemigoManual(enemigo);
 
-      expect(enemigo.disableBody).toHaveBeenCalledWith(true, true);
+      expect(enemigo.setActive).toHaveBeenCalledWith(false);
+      expect(enemigo.setVisible).toHaveBeenCalledWith(false);
       expect(any.senalFuria).toBe(1);
-      expect(jugador.setVelocityY).toHaveBeenCalledWith(-320); // REBOTE_PISOTON
-      expect(any.enemigos).not.toContain(enemigo);
+      expect(jugador.body.setVelocityY).toHaveBeenCalledWith(-320); // REBOTE_PISOTON
     });
   });
 

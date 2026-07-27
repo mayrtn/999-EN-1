@@ -8,7 +8,7 @@
  * casting `as any`, lo cual es aceptable para pruebas de caja blanca.
  *
  * Cobertura:
- * - Acotado de duración a [60000, 90000] (contexto de Requirements 3.1/3.5).
+ * - Acotado de duración a [30000, 50000] (contexto de Requirements 3.1/3.5).
  * - Movimiento de la mira según el input, acotado a los bordes (Requirement 3.2).
  * - Generación de disparo al presionar la acción primaria (Requirement 3.3).
  * - Impacto que registra y remueve el objetivo de la escena (Requirement 3.4).
@@ -38,6 +38,7 @@ vi.mock('phaser', () => {
           Math.min(max, Math.max(min, v)),
         Between: (min: number, _max: number) => min,
       },
+      BlendModes: { ADD: 1 },
     },
   };
 });
@@ -55,12 +56,33 @@ function crearEscena(duracionMs?: number): any {
 
   // Colaboradores de Phaser que las funciones bajo prueba consultan.
   escena.scale = { width: 800, height: 600 };
-  escena.time = { now: 0 };
+  escena.time = { now: 0, delayedCall: vi.fn() };
   escena.tweens = { add: vi.fn() };
-  escena.add = {
-    // mostrarDestelloDisparo usa this.add.circle(...).setDepth(...)
-    circle: vi.fn(() => ({ setDepth: vi.fn(() => ({})) })),
+
+  const chainable = (): any => {
+    const obj: any = {};
+    obj.setDepth = vi.fn(() => obj);
+    obj.setBlendMode = vi.fn(() => obj);
+    obj.setStrokeStyle = vi.fn(() => obj);
+    obj.setAlpha = vi.fn(() => obj);
+    obj.destroy = vi.fn();
+    obj.explode = vi.fn();
+    return obj;
   };
+  escena.add = {
+    circle: vi.fn(() => chainable()),
+    particles: vi.fn(() => chainable()),
+  };
+  escena.textures = { exists: vi.fn(() => true) };
+  escena.make = {
+    graphics: vi.fn(() => ({
+      fillStyle: vi.fn(),
+      fillRect: vi.fn(),
+      generateTexture: vi.fn(),
+      destroy: vi.fn(),
+    })),
+  };
+  escena.cameras = { main: { shake: vi.fn() } };
 
   return escena;
 }
@@ -120,26 +142,26 @@ function crearShell(): IShell & Record<string, ReturnType<typeof vi.fn>> {
 
 describe('NivelShooter', () => {
   // --- Acotado de duración (contexto Requirements 3.1 / 3.5) ---
-  describe('acotado de duración a [60000, 90000]', () => {
-    it('eleva una duración por debajo del mínimo hasta 60000', () => {
-      const escena = crearEscena(30_000);
-      expect(escena.duracionMs).toBe(60_000);
+  describe('acotado de duración a [30000, 50000]', () => {
+    it('eleva una duración por debajo del mínimo hasta 30000', () => {
+      const escena = crearEscena(10_000);
+      expect(escena.duracionMs).toBe(30_000);
     });
 
-    it('recorta una duración por encima del máximo hasta 90000', () => {
+    it('recorta una duración por encima del máximo hasta 50000', () => {
       const escena = crearEscena(120_000);
-      expect(escena.duracionMs).toBe(90_000);
+      expect(escena.duracionMs).toBe(50_000);
     });
 
     it('conserva una duración dentro del rango', () => {
-      const escena = crearEscena(75_000);
-      expect(escena.duracionMs).toBe(75_000);
+      const escena = crearEscena(40_000);
+      expect(escena.duracionMs).toBe(40_000);
     });
 
     it('usa un valor por defecto válido cuando no se configura', () => {
       const escena = crearEscena();
-      expect(escena.duracionMs).toBeGreaterThanOrEqual(60_000);
-      expect(escena.duracionMs).toBeLessThanOrEqual(90_000);
+      expect(escena.duracionMs).toBeGreaterThanOrEqual(30_000);
+      expect(escena.duracionMs).toBeLessThanOrEqual(50_000);
     });
   });
 
@@ -203,7 +225,7 @@ describe('NivelShooter', () => {
 
       expect(escena.disparos).toBe(1);
       // Se mostró el destello del disparo en la posición de la mira.
-      expect(escena.add.circle).toHaveBeenCalledTimes(1);
+      expect(escena.add.circle).toHaveBeenCalled();
     });
 
     it('no dispara cuando la acción no fue presionada', () => {
@@ -225,7 +247,7 @@ describe('NivelShooter', () => {
   describe('resolverImpacto: registra el impacto y remueve el objetivo (Req 3.4)', () => {
     it('destruye el objetivo alcanzado y lo saca del arreglo', () => {
       const escena = crearEscena();
-      escena.time = { now: 5_000 };
+      escena.time = { now: 5_000, delayedCall: vi.fn() };
       const objetivo = crearObjetivo(true, 4_900); // vida 100ms → quick-draw
       escena.objetivos = [objetivo];
 
@@ -240,7 +262,7 @@ describe('NivelShooter', () => {
 
     it('no cuenta quick-draw si el objetivo llevaba tiempo en pantalla', () => {
       const escena = crearEscena();
-      escena.time = { now: 10_000 };
+      escena.time = { now: 10_000, delayedCall: vi.fn() };
       const objetivo = crearObjetivo(true, 0); // vida 10s → no quick-draw
       escena.objetivos = [objetivo];
 
@@ -254,7 +276,7 @@ describe('NivelShooter', () => {
 
     it('un disparo fallido deja el arreglo intacto y no registra impacto', () => {
       const escena = crearEscena();
-      escena.time = { now: 5_000 };
+      escena.time = { now: 5_000, delayedCall: vi.fn() };
       const objetivo = crearObjetivo(false); // el punto no cae dentro
       escena.objetivos = [objetivo];
 
@@ -268,7 +290,7 @@ describe('NivelShooter', () => {
 
     it('solo destruye un objetivo por disparo (el primero alcanzado)', () => {
       const escena = crearEscena();
-      escena.time = { now: 0 };
+      escena.time = { now: 0, delayedCall: vi.fn() };
       const a = crearObjetivo(true);
       const b = crearObjetivo(true);
       escena.objetivos = [a, b];
