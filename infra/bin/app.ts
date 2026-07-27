@@ -23,9 +23,11 @@ const env: cdk.Environment | undefined =
     : undefined;
 
 // Modelo de Bedrock configurable por contexto: `cdk deploy -c bedrockModelId=...`
+// Se usa el inference profile cross-region (prefijo "us.") porque AWS requiere
+// inference profiles para invocar modelos de Anthropic con on-demand throughput.
 const bedrockModelId =
   (app.node.tryGetContext('bedrockModelId') as string | undefined) ??
-  'anthropic.claude-3-5-haiku-20241022-v1:0';
+  'anthropic.claude-3-haiku-20240307-v1:0';
 
 new ArcadeIaMutanteStack(app, 'ArcadeIaMutanteStack', {
   env,

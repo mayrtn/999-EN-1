@@ -36,6 +36,7 @@ import {
   crearCapaClima,
   asegurarTexturaParticula,
 } from '../mutacion';
+import { mostrarPanelIA } from '../mutacion/panelIA';
 import { sfxHit } from '../audio/sfx';
 import { CLAVE_PERSONAJE } from './EscenaSeleccion';
 import { TrackGenerator } from './carreras/TrackGenerator';
@@ -754,6 +755,13 @@ export class EscenaCarreras extends Phaser.Scene implements IEscena {
    */
   aplicarPerillas(perillas: PerillasMutacion): void {
     this.perillasIniciales = perillas;
+
+    // Panel visual dramático para la demo (delay para no solaparse con instrucciones)
+    // Solo mostrar si la IA real se invocó (no es la primera escena)
+    if (this.game.registry.get('ya_jugo_escena') === true) {
+      mostrarPanelIA(this, perillas, 5000);
+    }
+    this.game.registry.set('ya_jugo_escena', true);
 
     // Ajustar spawner con intensidad y agresividad (Requirements 8.2, 8.3).
     if (this.spawnerRivales) {

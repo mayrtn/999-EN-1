@@ -1,48 +1,117 @@
 # 999 EN 1 — Arcade IA Mutante
 
-Arcade web donde una IA (Amazon Bedrock) muta la estética y dificultad de cada escena
-en función del perfil de juego del jugador. Cliente en **Phaser 3 + TypeScript**, backend
-en **Node/TypeScript sobre AWS Lambda**, servido como sitio estático (S3 + CloudFront).
+Juego arcade web 8-bit donde una **IA (Amazon Bedrock — Claude Haiku 4.5)** muta la estética y dificultad de cada escena en tiempo real según cómo juega cada persona.
 
-## Estado del proyecto
+🎮 **Jugalo online:** https://d2xslelurqyc18.cloudfront.net
 
-Fase de especificación completada. El diseño, requisitos y plan de implementación viven en
-`.kiro/specs/arcade-ia-mutante/`.
+## Qué hace la IA
 
-## Documentación (specs)
+Después de cada escena, el juego analiza tu estilo de juego (furia, curiosidad, logro, riesgo) y le pregunta a Claude: "¿cómo muto el juego para este jugador?". Claude responde con:
+- **Paleta de colores** (infierno, sueño, neón, hostil)
+- **Intensidad de enemigos** y **agresividad**
+- **Clima** (lluvia, brasas, niebla)
+- **Mood de música** (calma, épico, tenso, furioso)
+- **Mensaje personalizado** al jugador
 
-| Documento | Descripción |
-|-----------|-------------|
-| [`requirements.md`](.kiro/specs/arcade-ia-mutante/requirements.md) | Requisitos funcionales (historias + criterios de aceptación). |
-| [`design.md`](.kiro/specs/arcade-ia-mutante/design.md) | Arquitectura, componentes, contrato compartido y propiedades de correctitud. |
-| [`tasks.md`](.kiro/specs/arcade-ia-mutante/tasks.md) | Plan de implementación por tareas, con grafo de dependencias. |
+Si la IA no responde a tiempo, un fallback local garantiza que el juego nunca se quede trabado.
 
-## Arquitectura de alto nivel
+## Stack tecnológico
+
+| Capa | Tecnología |
+|------|-----------|
+| Cliente | Phaser 3.80 + TypeScript, Vite |
+| Backend | AWS Lambda (Node.js 20) + Amazon Bedrock |
+| IA | Claude Haiku 4.5 (Anthropic) vía inference profile cross-region |
+| Infra | AWS CDK — S3 + CloudFront + API Gateway + Lambda |
+| Testing | Vitest + fast-check (property-based testing) |
+
+## Escenas del juego
+
+- **Plataformas** — Escena principal: correr, saltar, recolectar monedas, explorar portales ocultos
+- **Ritmo** — Mini-juego musical: presionar teclas al ritmo de las notas
+- **Shooter** — Naves espaciales: esquivar y disparar aliens
+- **Carreras** — Esquivar obstáculos y rivales en una carretera
+
+## Arquitectura
 
 ```
-Cliente (Phaser 3 + TS)  --HTTPS-->  API Gateway --> Lambda (Node/TS) --> Amazon Bedrock
-   |  Shell + Escenas                                     |
-   |  Motor_Scoring                                       +-- valida contra conjunto cerrado
-   |  Sistema_Mutacion
-   +-- servido como estatico desde S3 + CloudFront
+Cliente (Phaser 3 + TS)  ──HTTPS──▶  API Gateway ──▶ Lambda ──▶ Amazon Bedrock (Claude)
+   │                                       │
+   │  Shell (orquestador)                  └── valida JSON contra conjunto cerrado
+   │  Motor_Scoring (perfil jugador)
+   │  Sistema_Mutacion (aplica perillas)
+   │
+   └── servido como sitio estático desde S3 + CloudFront
 ```
 
-## Estructura de carpetas (planificada)
+## Cómo correr en local
+
+```bash
+npm install
+npm run dev          # Abre http://localhost:5173
+```
+
+Para que la IA funcione en local, creá un `.env` con:
+```
+VITE_MUTACION_ENDPOINT=https://tu-api-gateway.amazonaws.com/prod/mutacion
+VITE_MUTACION_API_KEY=tu-api-key
+```
+
+Sin `.env`, el juego funciona igual usando el fallback local (sin IA).
+
+## Build y deploy
+
+```bash
+# Build del cliente
+npm run build
+
+# Build de la Lambda
+npm run build:lambda
+
+# Deploy de infraestructura (requiere AWS CLI + credenciales)
+cd infra
+npm install
+npx cdk deploy -c bedrockModelId=anthropic.claude-haiku-4-5-20251001-v1:0
+
+# Subir cliente a S3
+aws s3 sync dist/ s3://NOMBRE-DEL-BUCKET --delete
+aws cloudfront create-invalidation --distribution-id ID --paths "/*"
+```
+
+## Estructura de carpetas
 
 ```
 999EN1/
-├── .kiro/specs/arcade-ia-mutante/   # Especificaciones (requirements, design, tasks)
 ├── src/
-│   ├── contrato/                    # Contrato_Compartido: tipos y conjuntos cerrados
-│   ├── motor/                       # Motor_Scoring (logica pura)
-│   ├── mutacion/                    # Sistema_Mutacion + fallback
-│   ├── input/                       # InputUnificado
-│   ├── escenas/                     # Nivel_Plataformas, Nivel_Ritmo, Nivel_Shooter
-│   ├── shell/                       # Shell, SceneManager, BootScene
-│   └── backend/                     # Handler de Lambda (Bedrock)
-└── infra/                           # Infraestructura como codigo (S3, CloudFront, API GW, Lambda)
+│   ├── contrato/       # Tipos e interfaces compartidos (conjunto cerrado)
+│   ├── motor/          # Motor_Scoring (lógica pura, determinística)
+│   ├── mutacion/       # Sistema_Mutacion + validador + fallback
+│   ├── input/          # InputUnificado (abstracción de teclado)
+│   ├── escenas/        # Nivel_Plataformas, Nivel_Ritmo, Nivel_Shooter, Escena_Carreras
+│   ├── shell/          # SceneManager, BootScene, LoadingScene, resolución de perillas
+│   ├── backend/        # Handler Lambda (Bedrock)
+│   └── audio/          # Efectos de sonido
+├── infra/              # AWS CDK (S3, CloudFront, API Gateway, Lambda, IAM)
+└── .kiro/
+    ├── specs/          # Especificaciones (requirements, design, tasks)
+    └── steering/       # Guías de código, arquitectura, testing
 ```
 
-## Como empezar (proximamente)
+## Tests
 
-La implementacion aun no comenzo. El plan de tareas en `tasks.md` es el punto de partida.
+```bash
+npm run test           # Vitest (single run)
+npm run test:watch     # Vitest (watch mode)
+npm run typecheck      # TypeScript sin emitir
+```
+
+## Limpiar recursos AWS
+
+```bash
+cd infra
+npx cdk destroy
+```
+
+## Equipo
+
+Proyecto para el Hackaton de Código Facilito.
