@@ -435,8 +435,8 @@ export class EscenaCarreras extends Phaser.Scene implements IEscena {
       shadow: { offsetX: 0, offsetY: 0, color: '#7cf9ff', blur: 6, fill: true },
     }).setOrigin(0.5).setDepth(101);
 
-    // Después de 5 segundos: desvanece instrucciones y arranca el juego
-    this.time.delayedCall(5000, () => {
+    // Después de 10 segundos (5s instrucciones + 5s panel IA): desvanece y arranca
+    this.time.delayedCall(10000, () => {
       this.esperandoInicio = false;
       this.tweens.add({
         targets: instruccion,

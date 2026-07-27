@@ -283,9 +283,9 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
     // Aplica las perillas resueltas por el Shell (Requirements 2.5, 9.4).
     this.aplicarPerillas(this.perillasIniciales);
 
-    // Esperar mostrando instrucciones antes de arrancar.
+    // Esperar mostrando instrucciones (5s) + panel IA (5s) antes de arrancar.
     this.esperandoInicio = true;
-    this.time.delayedCall(5000, () => {
+    this.time.delayedCall(10000, () => {
       this.esperandoInicio = false;
       this.tiempoInicio = this.time.now;
     });

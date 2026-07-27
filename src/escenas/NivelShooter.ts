@@ -280,9 +280,9 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
       this.aplicarPerillas(this.perillas);
     }
 
-    // Esperar mostrando instrucciones antes de arrancar.
+    // Esperar mostrando instrucciones (5s) + panel IA (5s) antes de arrancar.
     this.esperandoInicio = true;
-    this.time.delayedCall(5000, () => {
+    this.time.delayedCall(10000, () => {
       this.esperandoInicio = false;
       if (this.mira) this.mira.setVisible(true);
       // Temporizador de aparición de objetivos, según intensidad.

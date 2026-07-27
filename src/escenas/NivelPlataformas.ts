@@ -490,14 +490,21 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
   aplicarPerillas(perillas: PerillasMutacion): void {
     this.perillas = perillas;
 
-    // Panel visual dramático para la demo (muestra qué decidió la IA)
-    // Mostrar siempre, una sola vez al entrar a la escena
-    mostrarPanelIA(this, perillas, 5000);
-    // Marcar que ya se jugó una escena
+    // Primera entrada a plataformas: sin mutación visual (limpio).
+    // Solo aplicar tint/clima/panel cuando ya se jugó algo antes.
+    const yaJugoAntes = this.game.registry.get('ya_jugo_escena') === true;
     this.game.registry.set('ya_jugo_escena', true);
 
+    if (!yaJugoAntes) {
+      // Primera vez: no aplicar nada visual, salir temprano
+      return;
+    }
+
+    // Panel visual dramático para la demo (muestra qué decidió la IA)
+    mostrarPanelIA(this, perillas, 5000);
+
     // Mutación técnica (tint, clima, enemigos, audio, overlay)
-    // Tintar fondos de parallax según paleta SIEMPRE (cambio visual dramático)
+    // Tintar fondos de parallax según paleta
     const tintsFondo: Record<string, number> = {
       infierno: 0xff4422,
       sueno: 0x8855ff,
@@ -712,7 +719,7 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
    * la pantalla de "NIVEL COMPLETADO" con estadísticas.
    */
   private crearPuertaFinal(): void {
-    const puertaX = ANCHO_MUNDO - 60;
+    const puertaX = ANCHO_MUNDO - 30;
     const puertaY = ALTO_MUNDO - 32 - 56; // sobre el suelo
 
     // Arco de la puerta (visual, más grande)
