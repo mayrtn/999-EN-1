@@ -129,7 +129,7 @@ export function calcularFallback(perfil: PerfilJugador): PerillasMutacion {
   } else if (furia >= UMBRAL_ALTO) {
     clima = 'lluvia';
   } else {
-    clima = 'ninguno';
+    clima = 'niebla'; // Siempre algún clima para impacto visual
   }
 
   let mood_musica: MoodMusica;

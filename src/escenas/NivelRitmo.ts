@@ -352,11 +352,8 @@ export class NivelRitmo extends Phaser.Scene implements IEscena {
   aplicarPerillas(perillas: PerillasMutacion): void {
     this.perillasIniciales = perillas;
 
-    // Panel visual dramático para la demo (delay para no solaparse con instrucciones)
-    // Solo mostrar si la IA real se invocó (no es la primera escena)
-    if (this.game.registry.get('ya_jugo_escena') === true) {
-      mostrarPanelIA(this, perillas, 5000);
-    }
+    // Panel visual dramático para la demo (siempre al entrar)
+    mostrarPanelIA(this, perillas, 5000);
     this.game.registry.set('ya_jugo_escena', true);
 
     // Recrea la capa de clima según la perilla (o null para 'ninguno').
