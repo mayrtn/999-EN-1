@@ -1,1 +1,0 @@
-fix: arreglar tests escenas, agregar seccion Kiro en README
