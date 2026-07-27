@@ -45,6 +45,7 @@ import {
   crearCapaClima,
   asegurarTexturaParticula,
 } from '../mutacion';
+import { mostrarPanelIA } from '../mutacion/panelIA';
 import { sfxCoin, sfxCrystal, sfxJump, sfxPortal, sfxHit } from '../audio/sfx';
 import { CLAVE_PERSONAJE, PERSONAJES, type IdPersonaje } from './EscenaSeleccion';
 
@@ -236,6 +237,10 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
   // --- Progress bar (Feature 1) ---
   private barraProgresoFill!: Phaser.GameObjects.Rectangle;
 
+  // --- Backgrounds (para tintar con paleta) ---
+  private bgLayer0!: Phaser.GameObjects.TileSprite;
+  private bgLayer1!: Phaser.GameObjects.TileSprite;
+
 
 
   // --- Acumuladores de señal por rasgo (Requirement 9.1) ---
@@ -340,15 +345,15 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     this.cameras.main.setBackgroundColor('#12101c');
 
     // Background parallax (Layer 00 = fondo lejano, Layer 01 = cercano)
-    const bg0 = this.add.tileSprite(0, 0, ANCHO_MUNDO, ALTO_MUNDO, 'bg_layer0');
-    bg0.setOrigin(0, 0);
-    bg0.setScrollFactor(0);
-    bg0.setDepth(-10);
+    this.bgLayer0 = this.add.tileSprite(0, 0, ANCHO_MUNDO, ALTO_MUNDO, 'bg_layer0');
+    this.bgLayer0.setOrigin(0, 0);
+    this.bgLayer0.setScrollFactor(0);
+    this.bgLayer0.setDepth(-10);
 
-    const bg1 = this.add.tileSprite(0, 0, ANCHO_MUNDO, ALTO_MUNDO, 'bg_layer1');
-    bg1.setOrigin(0, 0);
-    bg1.setScrollFactor(0.3);
-    bg1.setDepth(-9);
+    this.bgLayer1 = this.add.tileSprite(0, 0, ANCHO_MUNDO, ALTO_MUNDO, 'bg_layer1');
+    this.bgLayer1.setOrigin(0, 0);
+    this.bgLayer1.setScrollFactor(0.3);
+    this.bgLayer1.setDepth(-9);
 
     this.crearPlataformas();
     this.crearJugador();
@@ -370,6 +375,7 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     console.log('[NivelPlataformas] Después de crearEnemigos');
     this.crearPuntosExploracion();
     this.crearAccesosOcultos();
+    this.crearPuertaFinal();
 
     // Mark portals that have already been used (prevent re-entry)
     for (const acceso of this.accesos) {
@@ -426,7 +432,6 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     if (!this.game.registry.get('plataformas_instrucciones_mostradas')) {
       this.mostrarOverlayControles();
     }
-
 
   }
 
@@ -485,15 +490,36 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
   aplicarPerillas(perillas: PerillasMutacion): void {
     this.perillas = perillas;
 
-    // Sprites tintables: enemigos siempre; jugador solo si usa placeholder.
-    // Las monedas usan sprite real con colores propios, no se tintan.
+    // Panel visual dramático para la demo (muestra qué decidió la IA)
+    // Solo mostrar si ya hubo una transición previa (la IA real se invoca después
+    // de la primera escena; la primera vez siempre usa fallback local).
+    const yaJugoAntes = this.game.registry.get('ya_jugo_escena') === true;
+    if (yaJugoAntes) {
+      mostrarPanelIA(this, perillas, 5000);
+    }
+    // Marcar que ya se jugó una escena (para la próxima transición)
+    this.game.registry.set('ya_jugo_escena', true);
+
+    // Mutación técnica (tint, clima, enemigos, audio, overlay)
+    // Tintar fondos de parallax según paleta (cambio visual dramático)
+    // Solo tintar si ya hubo una transición real (la IA decidió)
+    if (yaJugoAntes) {
+      const tintsFondo: Record<string, number> = {
+        infierno: 0xff4422,
+        sueno: 0x8855ff,
+        neon: 0x22ff88,
+        hostil: 0xaacc33,
+      };
+      const tintBg = tintsFondo[perillas.paleta] ?? 0xffffff;
+      if (this.bgLayer0) this.bgLayer0.setTint(tintBg);
+      if (this.bgLayer1) this.bgLayer1.setTint(tintBg);
+    }
+
     const spritesTintables: Phaser.GameObjects.Sprite[] = [
       ...(this.jugadorUsaPlaceholder ? [this.jugador] : []),
       ...this.enemigos,
     ];
 
-    // Capa de clima; si es 'ninguno' se crea un emisor placeholder detenido para
-    // respetar el contrato (capaClima no admite null).
     const capaClima =
       crearCapaClima(this, perillas.clima) ?? this.crearEmisorClimaPlaceholder();
 
@@ -640,7 +666,14 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     }
 
     this.monedas = this.physics.add.group({ allowGravity: false, immovable: true });
-    for (const m of MONEDAS) {
+    const monedasRecolectadas = (this.game.registry.get('monedas_recolectadas') as number[]) ?? [];
+    for (let i = 0; i < MONEDAS.length; i++) {
+      if (monedasRecolectadas.includes(i)) {
+        // Moneda ya recolectada: contar para señal y no crear sprite
+        this.senalLogro = Math.min(this.senalLogro + 1, this.oportunidadLogro);
+        continue;
+      }
+      const m = MONEDAS[i]!;
       const moneda = this.monedas.create(
         m.x,
         m.y,
@@ -649,6 +682,7 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
       moneda.setScale(2);
       moneda.play('coin_spin');
       moneda.setCircle(8);
+      moneda.setData('idx', i);
     }
   }
 
@@ -663,14 +697,134 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
       allowGravity: false,
       immovable: true,
     });
-    for (const punto of PUNTOS_EXPLORACION) {
+    const cristalesRecolectados = (this.game.registry.get('cristales_recolectados') as number[]) ?? [];
+    for (let i = 0; i < PUNTOS_EXPLORACION.length; i++) {
+      if (cristalesRecolectados.includes(i)) {
+        this.senalCuriosidad = Math.min(this.senalCuriosidad + 1, this.oportunidadCuriosidad);
+        continue;
+      }
+      const punto = PUNTOS_EXPLORACION[i]!;
       const estrella = this.exploracionGrupo.create(
         punto.x,
         punto.y,
         'star_collect'
       ) as Phaser.Physics.Arcade.Sprite;
       estrella.setScale(0.35);
+      estrella.setData('idx', i);
     }
+  }
+
+  /**
+   * Crea la puerta de fin de nivel al final del mundo. Al tocarla, se muestra
+   * la pantalla de "NIVEL COMPLETADO" con estadísticas.
+   */
+  private crearPuertaFinal(): void {
+    const puertaX = ANCHO_MUNDO - 60;
+    const puertaY = ALTO_MUNDO - 32 - 56; // sobre el suelo
+
+    // Arco de la puerta (visual, más grande)
+    const arco = this.add.graphics();
+    arco.fillStyle(0xffd700, 0.9);
+    arco.lineStyle(4, 0xffaa00, 1);
+    arco.beginPath();
+    arco.moveTo(puertaX - 36, puertaY + 44);
+    arco.lineTo(puertaX - 36, puertaY - 14);
+    arco.arc(puertaX, puertaY - 14, 36, Math.PI, 0, false);
+    arco.lineTo(puertaX + 36, puertaY + 44);
+    arco.closePath();
+    arco.fillPath();
+    arco.strokePath();
+
+    // Texto "★" sobre la puerta
+    this.add.text(puertaX, puertaY - 24, '★', {
+      fontSize: '28px',
+    }).setOrigin(0.5);
+
+    // Zona de colisión (más grande)
+    const zona = this.add.rectangle(puertaX, puertaY, 72, 88, 0x000000, 0);
+    this.physics.add.existing(zona, true);
+
+    // Overlap con el jugador
+    this.physics.add.overlap(this.jugador, zona, () => {
+      if (this.game.registry.get('nivel_completado')) return;
+      this.game.registry.set('nivel_completado', true);
+      this.mostrarNivelCompletado();
+    });
+
+    // Efecto de brillo pulsante
+    this.tweens.add({
+      targets: arco,
+      alpha: { from: 0.7, to: 1 },
+      duration: 800,
+      yoyo: true,
+      repeat: -1,
+    });
+  }
+
+  /**
+   * Pantalla de "NIVEL COMPLETADO" — muestra estadísticas y luego transiciona.
+   */
+  private mostrarNivelCompletado(): void {
+    // Congelar al jugador
+    this.jugador.setVelocity(0, 0);
+    (this.jugador.body as Phaser.Physics.Arcade.Body).enable = false;
+
+    const camW = this.cameras.main.width;
+    const camH = this.cameras.main.height;
+
+    // Overlay oscuro
+    const overlay = this.add.rectangle(camW / 2, camH / 2, camW, camH, 0x000000, 0)
+      .setScrollFactor(0).setDepth(400);
+    this.tweens.add({ targets: overlay, fillAlpha: 0.85, duration: 500 });
+
+    // Título
+    const titulo = this.add.text(camW / 2, camH / 2 - 70, '🏆 NIVEL COMPLETADO 🏆', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '14px',
+      color: '#ffd700',
+      shadow: { offsetX: 0, offsetY: 0, color: '#ffd700', blur: 12, fill: true },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(401).setAlpha(0);
+
+    // Estadísticas
+    const monedasRecolectadas = ((this.game.registry.get('monedas_recolectadas') as number[]) ?? []).length;
+    const cristalesRecolectados = ((this.game.registry.get('cristales_recolectados') as number[]) ?? []).length;
+    const portalesUsados = ['ritmo', 'shooter', 'carreras'].filter(
+      (d) => this.game.registry.get('portal_usado_' + d)
+    ).length;
+
+    const stats = this.add.text(camW / 2, camH / 2 - 15, [
+      `🪙 Monedas: ${monedasRecolectadas}/${MONEDAS.length}`,
+      `💎 Cristales: ${cristalesRecolectados}/${PUNTOS_EXPLORACION.length}`,
+      `🌀 Portales: ${portalesUsados}/3`,
+    ].join('\n'), {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '9px',
+      color: '#ffffff',
+      align: 'center',
+      lineSpacing: 10,
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(401).setAlpha(0);
+
+    // Mensaje final
+    const mensaje = this.add.text(camW / 2, camH / 2 + 60, '¡La IA mutará tu próxima partida!', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '7px',
+      color: '#7cf9ff',
+      align: 'center',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(401).setAlpha(0);
+
+    // Animaciones de entrada
+    this.tweens.add({ targets: titulo, alpha: 1, duration: 600, delay: 400 });
+    this.tweens.add({ targets: stats, alpha: 1, duration: 600, delay: 800 });
+    this.tweens.add({ targets: mensaje, alpha: 1, duration: 600, delay: 1400 });
+
+    // Después de 5 segundos, reportar telemetría y volver a plataformas (mutado por IA)
+    this.time.delayedCall(5000, () => {
+      // Reportar telemetría al Shell para que la IA pueda mutar
+      if (this.shell) {
+        this.shell.reportarTelemetria(this.construirTelemetria());
+        this.shell.solicitarTransicion('plataformas');
+      }
+    });
   }
 
   /**
@@ -835,6 +989,13 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     sprite.disableBody(true, true);
     this.senalLogro = Math.min(this.senalLogro + 1, this.oportunidadLogro);
     sfxCoin();
+    // Persistir moneda recolectada en registry para que no reaparezca
+    const idx = sprite.getData('idx') as number;
+    const recolectadas = (this.game.registry.get('monedas_recolectadas') as number[]) ?? [];
+    if (!recolectadas.includes(idx)) {
+      recolectadas.push(idx);
+      this.game.registry.set('monedas_recolectadas', recolectadas);
+    }
     // Update HUD
     const hud = this.children.getByName('hud_monedas') as Phaser.GameObjects.Text | null;
     if (hud) hud.setText(`${this.senalLogro}/${MONEDAS.length}`);
@@ -852,6 +1013,13 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
       this.oportunidadCuriosidad
     );
     sfxCrystal();
+    // Persistir cristal recolectado en registry
+    const idx = sprite.getData('idx') as number;
+    const recolectados = (this.game.registry.get('cristales_recolectados') as number[]) ?? [];
+    if (!recolectados.includes(idx)) {
+      recolectados.push(idx);
+      this.game.registry.set('cristales_recolectados', recolectados);
+    }
     // Update HUD
     const hud = this.children.getByName('hud_cristales') as Phaser.GameObjects.Text | null;
     if (hud) hud.setText(`${this.senalCuriosidad}/${PUNTOS_EXPLORACION.length}`);
@@ -867,7 +1035,8 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
   /**
    * Activa un acceso oculto: suma al rasgo `curiosidad` (explorar) y solicita al
    * Shell la transición hacia la escena destino (Requirements 1.6, 1.7). Cada
-   * acceso se activa una sola vez.
+   * acceso se activa una sola vez. Muestra una pantalla de "entrando al portal"
+   * antes de transicionar.
    */
   private activarAcceso(acceso: AccesoOculto): void {
     if (acceso.activado) return;
@@ -889,7 +1058,62 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     this.posicionAnteDePortal = { x: this.jugador.x, y: this.jugador.y };
     this.game.registry.set('plataformas_posicion', this.posicionAnteDePortal);
 
-    this.solicitarTransicion(acceso.destino);
+    // --- Pantalla de "Entrando al portal" ---
+    // Congelar al jugador
+    this.jugador.setVelocity(0, 0);
+    (this.jugador.body as Phaser.Physics.Arcade.Body).enable = false;
+
+    const camW = this.cameras.main.width;
+    const camH = this.cameras.main.height;
+
+    // Overlay oscuro
+    const overlay = this.add.rectangle(
+      camW / 2, camH / 2, camW, camH, 0x000000, 0
+    ).setScrollFactor(0).setDepth(200);
+
+    this.tweens.add({
+      targets: overlay,
+      fillAlpha: 0.8,
+      duration: 400,
+    });
+
+    // Texto "PORTAL ACTIVADO"
+    const titulo = this.add.text(camW / 2, camH / 2 - 30, '⚡ PORTAL ACTIVADO ⚡', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '14px',
+      color: '#7cf9ff',
+      align: 'center',
+      shadow: { offsetX: 0, offsetY: 0, color: '#7cf9ff', blur: 12, fill: true },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(201).setAlpha(0);
+
+    const destinos: Record<string, string> = {
+      ritmo: '🎵 NIVEL RITMO',
+      shooter: '🔫 NIVEL SHOOTER',
+      carreras: '🏎️ NIVEL CARRERAS',
+    };
+    const subtitulo = this.add.text(
+      camW / 2, camH / 2 + 10,
+      destinos[acceso.destino] ?? acceso.destino.toUpperCase(),
+      {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '10px',
+        color: '#ffffff',
+        align: 'center',
+      }
+    ).setOrigin(0.5).setScrollFactor(0).setDepth(201).setAlpha(0);
+
+    // Animación de entrada
+    this.tweens.add({
+      targets: [titulo, subtitulo],
+      alpha: 1,
+      duration: 400,
+      delay: 300,
+    });
+
+    // Transicionar después de la animación
+    this.time.delayedCall(1500, () => {
+      this.solicitarTransicion(acceso.destino);
+    });
   }
 
   /**
@@ -1060,8 +1284,8 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     this.monedas.setVisible(false);
     this.exploracionGrupo.setVisible(false);
     // Ocultar HUD también
-    this.children.getByName('hud_monedas')?.setVisible(false);
-    this.children.getByName('hud_cristales')?.setVisible(false);
+    (this.children.getByName('hud_monedas') as Phaser.GameObjects.Components.Visible | null)?.setVisible(false);
+    (this.children.getByName('hud_cristales') as Phaser.GameObjects.Components.Visible | null)?.setVisible(false);
     if (this.barraProgresoFill) this.barraProgresoFill.setVisible(false);
 
     const titulo = this.add
@@ -1115,8 +1339,8 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
           this.monedas.setVisible(true);
           this.exploracionGrupo.setVisible(true);
           // Mostrar HUD
-          this.children.getByName('hud_monedas')?.setVisible(true);
-          this.children.getByName('hud_cristales')?.setVisible(true);
+          (this.children.getByName('hud_monedas') as Phaser.GameObjects.Components.Visible | null)?.setVisible(true);
+          (this.children.getByName('hud_cristales') as Phaser.GameObjects.Components.Visible | null)?.setVisible(true);
           if (this.barraProgresoFill) this.barraProgresoFill.setVisible(true);
         },
       });

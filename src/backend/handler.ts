@@ -52,11 +52,19 @@ import { sanitizarPerillas } from '../mutacion/validador';
 
 /**
  * Id del modelo de Bedrock a invocar. Se lee del entorno; el default es el
- * modelo recomendado por el diseño (Claude 3.5 Haiku), económico y rápido para
+ * modelo recomendado por el diseño (Claude 3 Haiku), económico y rápido para
  * un payload pequeño (Requirement 10.4).
+ *
+ * AWS requiere usar un inference profile cross-region (prefijo "us.") para
+ * invocar modelos de Anthropic con on-demand throughput.
  */
 const BEDROCK_MODEL_ID =
-  process.env.BEDROCK_MODEL_ID ?? 'anthropic.claude-3-5-haiku-20241022-v1:0';
+  process.env.BEDROCK_MODEL_ID ?? 'anthropic.claude-haiku-4-5-20251001-v1:0';
+
+/** Inference profile ID: prefijo cross-region "us." + model ID. */
+const INFERENCE_PROFILE_ID = BEDROCK_MODEL_ID.startsWith('us.')
+  ? BEDROCK_MODEL_ID
+  : `us.${BEDROCK_MODEL_ID}`;
 
 /** Origen permitido para las cabeceras CORS de las respuestas (Requirement 10.6). */
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? '*';
@@ -283,7 +291,7 @@ async function pedirPerillasABedrock(
   };
 
   const comando = new InvokeModelCommand({
-    modelId: BEDROCK_MODEL_ID,
+    modelId: INFERENCE_PROFILE_ID,
     contentType: 'application/json',
     accept: 'application/json',
     body: JSON.stringify(payload),

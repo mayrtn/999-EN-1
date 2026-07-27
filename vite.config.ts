@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { viteStaticCopy } from 'vite-plugin-static-copy';
 
 // Bundler estatico para el cliente Phaser 3.
 // El build produce artefactos estaticos (HTML/JS/CSS/assets) listos para
@@ -6,6 +7,19 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   // Rutas relativas para que el bundle funcione bajo cualquier prefijo de CloudFront.
   base: './',
+  plugins: [
+    // Los assets del juego se referencian con rutas como 'src/assets/...' en los
+    // preload() de Phaser. En dev, Vite sirve src/ directamente; en prod necesitamos
+    // copiar esos archivos al dist/ manteniendo la estructura de rutas.
+    viteStaticCopy({
+      targets: [
+        {
+          src: 'src/assets',
+          dest: 'src',
+        },
+      ],
+    }),
+  ],
   build: {
     outDir: 'dist',
     emptyOutDir: true,

@@ -40,6 +40,7 @@ import {
   crearCapaClima,
   asegurarTexturaParticula,
 } from '../mutacion';
+import { mostrarPanelIA } from '../mutacion/panelIA';
 import { sfxShoot, sfxHit } from '../audio/sfx';
 import { CLAVE_PERSONAJE } from './EscenaSeleccion';
 
@@ -603,6 +604,13 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
    */
   aplicarPerillas(perillas: PerillasMutacion): void {
     this.perillas = perillas;
+
+    // Panel visual dramático para la demo (delay para no solaparse con instrucciones)
+    // Solo mostrar si la IA real se invocó (no es la primera escena)
+    if (this.game.registry.get('ya_jugo_escena') === true) {
+      mostrarPanelIA(this, perillas, 5000);
+    }
+    this.game.registry.set('ya_jugo_escena', true);
 
     // La escena podría no estar aún creada (llamada temprana); si falta la mira
     // se aplicará en create().

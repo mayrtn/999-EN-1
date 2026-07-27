@@ -115,13 +115,18 @@ export class ArcadeIaMutanteStack extends cdk.Stack {
     });
 
     // Politica IAM: permiso para invocar el modelo de Bedrock elegido. Requirement 10.4
+    // Se incluye tanto el ARN del foundation-model como el del inference-profile
+    // cross-region (prefijo "us.") porque AWS ahora requiere inference profiles
+    // para invocar modelos de Anthropic con on-demand throughput.
     mutacionFn.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream'],
         resources: [
-          // Acotado al modelo de fundacion configurado (no '*').
           `arn:${this.partition}:bedrock:${this.region}::foundation-model/${props.bedrockModelId}`,
+          `arn:${this.partition}:bedrock:${this.region}:${this.account}:inference-profile/us.${props.bedrockModelId}`,
+          // Wildcard para cross-region inference profiles de Anthropic.
+          `arn:${this.partition}:bedrock:*::foundation-model/${props.bedrockModelId}`,
         ],
       }),
     );

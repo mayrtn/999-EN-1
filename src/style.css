@@ -1,0 +1,22 @@
+:root {
+  color-scheme: dark;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #0b0b12;
+  overflow: hidden;
+  font-family: 'Press Start 2P', cursive;
+}
+#game-root {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+}
+/* Pixel-art nitido para la estetica 8-bit (Requirement 11.3). */
+canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
