@@ -65,6 +65,8 @@ function crearEscena(duracionMs?: number): any {
     obj.setBlendMode = vi.fn(() => obj);
     obj.setStrokeStyle = vi.fn(() => obj);
     obj.setAlpha = vi.fn(() => obj);
+    obj.setScrollFactor = vi.fn(() => obj);
+    obj.setOrigin = vi.fn(() => obj);
     obj.destroy = vi.fn();
     obj.explode = vi.fn();
     return obj;
@@ -72,6 +74,8 @@ function crearEscena(duracionMs?: number): any {
   escena.add = {
     circle: vi.fn(() => chainable()),
     particles: vi.fn(() => chainable()),
+    rectangle: vi.fn(() => chainable()),
+    text: vi.fn(() => chainable()),
   };
   escena.textures = { exists: vi.fn(() => true) };
   escena.make = {
@@ -313,6 +317,11 @@ describe('NivelShooter', () => {
 
       escena.finalizar();
 
+      // mostrarResultadosYSalir uses delayedCall; extract and invoke the callback
+      const delayedCallArgs = escena.time.delayedCall.mock.calls;
+      const lastCall = delayedCallArgs[delayedCallArgs.length - 1];
+      if (lastCall) lastCall[1](); // invoke the callback
+
       expect(escena.terminado).toBe(true);
       expect(shell.reportarTelemetria).toHaveBeenCalledTimes(1);
       expect(shell.solicitarTransicion).toHaveBeenCalledWith('plataformas');
@@ -326,6 +335,10 @@ describe('NivelShooter', () => {
       escena.timerFin = { remove: vi.fn() };
 
       escena.finalizar();
+      const delayedCallArgs = escena.time.delayedCall.mock.calls;
+      const lastCall = delayedCallArgs[delayedCallArgs.length - 1];
+      if (lastCall) lastCall[1]();
+
       escena.finalizar();
 
       expect(shell.reportarTelemetria).toHaveBeenCalledTimes(1);

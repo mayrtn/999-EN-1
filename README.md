@@ -34,14 +34,61 @@ Si la IA no responde a tiempo, un fallback local garantiza que el juego nunca se
 
 ## Arquitectura
 
+```mermaid
+flowchart LR
+    Navegador(["🧑 Navegador"])
+
+    subgraph Cliente["🎮 Cliente — Phaser 3 + TypeScript"]
+        Shell["Shell<br/>(orquestador)"]
+        Motor["Motor_Scoring<br/>(perfil del jugador)"]
+        Mutacion["Sistema_Mutacion<br/>(aplica perillas)"]
+        Fallback["Mutación_Fallback<br/>(local, sin red)"]
+    end
+
+    subgraph AWS["☁️ AWS"]
+        CF["CloudFront"]
+        S3["S3<br/>(sitio estático)"]
+        APIGW["API Gateway"]
+        Lambda["Lambda<br/>(Node.js 20)"]
+        Bedrock["Amazon Bedrock<br/>Claude Haiku 4.5"]
+    end
+
+    Navegador -->|"HTTPS"| CF --> S3
+    CF -.->|"sirve el juego"| Navegador
+
+    Shell --> Motor --> Mutacion
+    Mutacion -->|"perfil + próxima escena"| APIGW --> Lambda
+    Lambda -->|"prompt"| Bedrock
+    Bedrock -->|"JSON de perillas"| Lambda
+    Lambda -->|"valida contra conjunto cerrado"| Mutacion
+    Mutacion -.->|"si falla o hay timeout"| Fallback
+    Fallback --> Shell
 ```
-Cliente (Phaser 3 + TS)  ──HTTPS──▶  API Gateway ──▶ Lambda ──▶ Amazon Bedrock (Claude)
-   │                                       │
-   │  Shell (orquestador)                  └── valida JSON contra conjunto cerrado
-   │  Motor_Scoring (perfil jugador)
-   │  Sistema_Mutacion (aplica perillas)
-   │
-   └── servido como sitio estático desde S3 + CloudFront
+
+### Flujo de una mutación
+
+```mermaid
+sequenceDiagram
+    participant J as Jugador
+    participant M as Motor_Scoring
+    participant S as Shell
+    participant L as Lambda
+    participant B as Amazon Bedrock (Claude)
+
+    J->>M: Juega la escena (saltos, riesgos, monedas...)
+    M->>M: Acumula rasgos (furia, curiosidad, logro, riesgo)
+    S->>L: POST /mutacion { perfil, proximaEscena }
+    L->>L: Verifica autorización (API key)
+    L->>B: InvokeModel (system prompt + perfil)
+    B-->>L: JSON { paleta, enemigos, clima, mood, mensaje }
+    L->>L: Valida contra conjunto cerrado
+    alt Respuesta válida
+        L-->>S: 200 Perillas_Mutacion
+    else Timeout, error o respuesta inválida
+        L-->>S: 502
+        S->>S: Aplica Mutación_Fallback local
+    end
+    S->>J: Próxima escena mutada (colores, enemigos, música, mensaje)
 ```
 
 ## Cómo correr en local
@@ -115,6 +162,10 @@ npx cdk destroy
 ## Equipo
 
 Proyecto para el Hackaton de Código Facilito.
+
+## Desarrollo con Kiro
+
+El proyecto fue desarrollado usando **Kiro** como IDE con asistencia de IA. Kiro gestionó las specs (requirements → design → tasks), generó la arquitectura modular, escribió los property-based tests con fast-check, y asistió en la implementación iterativa de cada módulo. Los steering files (`.kiro/steering/`) guiaron las convenciones de código, testing y arquitectura durante toda la sesión.
 
 ## Créditos de assets
 
