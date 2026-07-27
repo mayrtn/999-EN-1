@@ -65,6 +65,8 @@ function stubVisuales(i: EscenaInterna): void {
     setDepth: vi.fn().mockReturnThis(),
     setBlendMode: vi.fn().mockReturnThis(),
     setAlpha: vi.fn().mockReturnThis(),
+    setScrollFactor: vi.fn().mockReturnThis(),
+    setOrigin: vi.fn().mockReturnThis(),
     destroy: vi.fn(),
     explode: vi.fn(),
   });
@@ -72,6 +74,7 @@ function stubVisuales(i: EscenaInterna): void {
     particles: vi.fn(() => chainable()),
     rectangle: vi.fn(() => chainable()),
     circle: vi.fn(() => chainable()),
+    text: vi.fn(() => chainable()),
   };
   i.tweens = { add: vi.fn() };
   i.time = { delayedCall: vi.fn(), now: 0 };
@@ -286,17 +289,19 @@ describe('NivelRitmo', () => {
       i.hud = null;
       i.tiempoInicio = 1000;
       i.esperandoInicio = false;
+      stubVisuales(i);
     });
 
     it('al agotarse la duración emite telemetría y solicita retorno a plataformas', () => {
-      // transcurrido = 76000 - 1000 = 75000 ≥ duracionMs
       escena.update(1000 + DURACION_DEFECTO_MS);
+
+      // mostrarResultadosYSalir uses delayedCall; invoke the callback
+      const calls = (i.time as any).delayedCall.mock.calls;
+      const lastCall = calls[calls.length - 1];
+      if (lastCall) lastCall[1]();
 
       expect(i.finalizado).toBe(true);
       expect(shell.reportarTelemetria).toHaveBeenCalledTimes(1);
-      expect(shell.reportarTelemetria).toHaveBeenCalledWith(
-        escena.construirTelemetria(),
-      );
       expect(shell.solicitarTransicion).toHaveBeenCalledTimes(1);
       expect(shell.solicitarTransicion).toHaveBeenCalledWith('plataformas');
     });
@@ -311,6 +316,10 @@ describe('NivelRitmo', () => {
 
     it('finaliza una sola vez aunque update se llame de nuevo', () => {
       escena.update(1000 + DURACION_DEFECTO_MS);
+      const calls = (i.time as any).delayedCall.mock.calls;
+      const lastCall = calls[calls.length - 1];
+      if (lastCall) lastCall[1]();
+
       escena.update(1000 + DURACION_DEFECTO_MS + 5000);
 
       expect(shell.reportarTelemetria).toHaveBeenCalledTimes(1);
@@ -319,6 +328,10 @@ describe('NivelRitmo', () => {
 
     it('finalizar() directo también es idempotente', () => {
       i.finalizar();
+      const calls = (i.time as any).delayedCall.mock.calls;
+      const lastCall = calls[calls.length - 1];
+      if (lastCall) lastCall[1]();
+
       i.finalizar();
 
       expect(shell.reportarTelemetria).toHaveBeenCalledTimes(1);

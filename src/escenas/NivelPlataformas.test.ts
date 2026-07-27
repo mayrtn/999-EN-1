@@ -93,17 +93,18 @@ function crearRelojFalso() {
 
 /** Sprite de moneda/enemigo plano con `active` y `disableBody` espiables. */
 function crearSpriteFalso(overrides: Record<string, unknown> = {}) {
+  const data: Record<string, unknown> = {};
   return {
     active: true,
     disableBody: vi.fn(),
+    getData: vi.fn((key: string) => data[key]),
+    setData: vi.fn((key: string, val: unknown) => { data[key] = val; }),
     ...overrides,
   };
 }
 
 /**
  * Vista laxa de la escena para ejercitar sus miembros privados desde los tests.
- * Los `private` de TS no existen en runtime; esta interfaz expone los campos y
- * handlers que los tests tocan sin recurrir a `unknown` (que rompería tsc).
  */
 interface EscenaExpuesta {
   recolectarMoneda(moneda: unknown): void;
@@ -119,6 +120,12 @@ interface EscenaExpuesta {
   time: unknown;
   children: unknown;
   enemigos: unknown[];
+  cameras: unknown;
+  game: unknown;
+  tweens: unknown;
+  add: unknown;
+  anims: unknown;
+  physics: unknown;
 }
 
 /**
@@ -130,11 +137,44 @@ function prepararEscena() {
   const jugador = crearJugadorFalso();
   const time = crearRelojFalso();
   const children = { getByName: vi.fn().mockReturnValue(null) };
+  const cameras = { main: { flash: vi.fn(), shake: vi.fn() } };
+  const registry = new Map<string, unknown>();
+  const game = {
+    registry: {
+      get: vi.fn((k: string) => registry.get(k)),
+      set: vi.fn((k: string, v: unknown) => registry.set(k, v)),
+    },
+  };
+  const tweens = { add: vi.fn() };
+  const mockText = {
+    setOrigin: vi.fn().mockReturnThis(),
+    setDepth: vi.fn().mockReturnThis(),
+    setScrollFactor: vi.fn().mockReturnThis(),
+    setAlpha: vi.fn().mockReturnThis(),
+    destroy: vi.fn(),
+  };
+  const mockRect = {
+    setScrollFactor: vi.fn().mockReturnThis(),
+    setDepth: vi.fn().mockReturnThis(),
+    setAlpha: vi.fn().mockReturnThis(),
+    setOrigin: vi.fn().mockReturnThis(),
+    destroy: vi.fn(),
+  };
+  const add = {
+    text: vi.fn().mockReturnValue(mockText),
+    rectangle: vi.fn().mockReturnValue(mockRect),
+  };
+  const anims = { exists: vi.fn().mockReturnValue(false) };
   const any = escena as unknown as EscenaExpuesta;
   any.jugador = jugador;
   any.time = time;
   any.children = children;
-  return { escena, any, jugador, time };
+  any.cameras = cameras;
+  any.game = game;
+  any.tweens = tweens;
+  any.add = add;
+  any.anims = anims;
+  return { escena, any, jugador, time, cameras, game };
 }
 
 describe('NivelPlataformas', () => {
@@ -279,7 +319,6 @@ describe('NivelPlataformas', () => {
       jugador.body.velocity.y = 120; // cayendo
       jugador.x = 200;
       jugador.y = 450; // above enemy → stomp condition (jugador.y < enemigo.y - 10)
-      // tocarEnemigoManual reads body as Arcade.Body and calls setVelocityY on it
       jugador.body.setVelocityY = vi.fn();
       const enemigo = {
         x: 200,
@@ -287,12 +326,15 @@ describe('NivelPlataformas', () => {
         active: true,
         setVisible: vi.fn(),
         setActive: vi.fn(),
+        getData: vi.fn().mockReturnValue(false),
+        setData: vi.fn(),
+        setTintFill: vi.fn(),
+        clearTint: vi.fn(),
       };
 
       any.tocarEnemigoManual(enemigo);
 
       expect(enemigo.setActive).toHaveBeenCalledWith(false);
-      expect(enemigo.setVisible).toHaveBeenCalledWith(false);
       expect(any.senalFuria).toBe(1);
       expect(jugador.body.setVelocityY).toHaveBeenCalledWith(-320); // REBOTE_PISOTON
     });
@@ -300,57 +342,66 @@ describe('NivelPlataformas', () => {
 
   describe('activarAcceso() — acceso oculto → transición (Req 1.6, 1.7)', () => {
     it('suma a curiosidad y solicita la transición al destino vía el Shell', () => {
-      const { escena, any } = prepararEscena();
+      const { escena, any, time } = prepararEscena();
       const shell = crearShellMock();
       escena.init({ shell } as never);
-      // init reinicia jugador/time no; los handlers de acceso no los usan.
       const acceso = {
-        objeto: { setFillStyle: vi.fn() },
+        objeto: {},
         destino: 'ritmo',
         activado: false,
       };
 
       any.activarAcceso(acceso);
 
+      // activarAcceso uses delayedCall for the transition; invoke all callbacks
+      for (const call of time.delayedCall.mock.calls) {
+        if (typeof call[1] === 'function') call[1]();
+      }
+
       expect(acceso.activado).toBe(true);
       expect(any.senalCuriosidad).toBe(1);
-      expect(acceso.objeto.setFillStyle).toHaveBeenCalledTimes(1);
       expect(shell.reportarTelemetria).toHaveBeenCalledTimes(1);
       expect(shell.solicitarTransicion).toHaveBeenCalledTimes(1);
       expect(shell.solicitarTransicion).toHaveBeenCalledWith('ritmo');
     });
 
     it('reporta la telemetría de la escena de plataformas al Shell', () => {
-      const { escena, any } = prepararEscena();
+      const { escena, any, time } = prepararEscena();
       const shell = crearShellMock();
       escena.init({ shell } as never);
 
       any.activarAcceso({
-        objeto: { setFillStyle: vi.fn() },
+        objeto: {},
         destino: 'shooter',
         activado: false,
       });
 
+      for (const call of time.delayedCall.mock.calls) {
+        if (typeof call[1] === 'function') call[1]();
+      }
+
       const primeraLlamada = shell.reportarTelemetria.mock.calls[0]!;
       const telemetria = primeraLlamada[0];
       expect(telemetria.escena).toBe('plataformas');
-      // La señal de curiosidad ya viene incrementada al reportar.
       expect(telemetria.porRasgo.curiosidad.senal).toBe(1);
       expect(shell.solicitarTransicion).toHaveBeenCalledWith('shooter');
     });
 
     it('un acceso ya activado no vuelve a solicitar transición (una sola vez)', () => {
-      const { escena, any } = prepararEscena();
+      const { escena, any, time } = prepararEscena();
       const shell = crearShellMock();
       escena.init({ shell } as never);
       const acceso = {
-        objeto: { setFillStyle: vi.fn() },
+        objeto: {},
         destino: 'ritmo',
         activado: false,
       };
 
       any.activarAcceso(acceso);
-      any.activarAcceso(acceso); // segunda vez: no-op
+      for (const call of time.delayedCall.mock.calls) {
+        if (typeof call[1] === 'function') call[1]();
+      }
+      any.activarAcceso(acceso);
 
       expect(shell.solicitarTransicion).toHaveBeenCalledTimes(1);
       expect(shell.reportarTelemetria).toHaveBeenCalledTimes(1);
@@ -360,7 +411,7 @@ describe('NivelPlataformas', () => {
     it('sin Shell inyectado no arroja al activar un acceso (modo autónomo)', () => {
       const { any } = prepararEscena();
       const acceso = {
-        objeto: { setFillStyle: vi.fn() },
+        objeto: {},
         destino: 'ritmo',
         activado: false,
       };

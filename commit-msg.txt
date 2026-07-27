@@ -1,1 +1,1 @@
-fix: unused vars in panelIA for build
+fix: arreglar tests escenas, agregar seccion Kiro en README
