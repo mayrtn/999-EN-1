@@ -56,13 +56,13 @@ flowchart LR
     Navegador -->|"HTTPS"| CF --> S3
     CF -.->|"sirve el juego"| Navegador
 
-    Shell --> Motor --> Mutacion
-    Mutacion -->|"perfil + próxima escena"| APIGW --> Lambda
+    Motor -->|"perfil del jugador"| Shell
+    Shell -->|"perfil + próxima escena"| APIGW --> Lambda
     Lambda -->|"prompt"| Bedrock
     Bedrock -->|"JSON de perillas"| Lambda
-    Lambda -->|"valida contra conjunto cerrado"| Mutacion
-    Mutacion -.->|"si falla o hay timeout"| Fallback
-    Fallback --> Shell
+    Lambda -->|"perillas validadas (o error)"| Shell
+    Shell -.->|"en paralelo, por si falla o hay timeout"| Fallback
+    Shell -->|"perillas resueltas"| Mutacion
 ```
 
 ### Flujo de una mutación
@@ -77,16 +77,17 @@ sequenceDiagram
 
     J->>M: Juega la escena (saltos, riesgos, monedas...)
     M->>M: Acumula rasgos (furia, curiosidad, logro, riesgo)
+    S->>S: Calcula Mutación_Fallback local (en paralelo, siempre lista)
     S->>L: POST /mutacion { perfil, proximaEscena }
     L->>L: Verifica autorización (API key)
     L->>B: InvokeModel (system prompt + perfil)
-    B-->>L: JSON { paleta, enemigos, clima, mood, mensaje }
+    B-->>L: JSON { paleta, intensidad_enemigos, agresividad, clima, mood_musica, mensaje }
     L->>L: Valida contra conjunto cerrado
-    alt Respuesta válida
+    alt Respuesta válida y a tiempo
         L-->>S: 200 Perillas_Mutacion
     else Timeout, error o respuesta inválida
         L-->>S: 502
-        S->>S: Aplica Mutación_Fallback local
+        S->>S: Usa la Mutación_Fallback ya calculada
     end
     S->>J: Próxima escena mutada (colores, enemigos, música, mensaje)
 ```
