@@ -63,9 +63,9 @@ export interface RegistroEscena {
 /**
  * Registro declarativo de las Escenas del juego (Requirement 9.7).
  *
- * Las tres Escenas de la demo están habilitadas. La `Escena_Carreras` NO figura
- * aquí todavía: la tarea 11.5 añadirá su entrada (con `habilitada: false`) sin
- * modificar el {@link SceneManager}.
+ * Las tres Escenas de la demo y la `Escena_Carreras` están habilitadas.
+ * Añadir o deshabilitar Escenas se hace aquí, sin modificar el
+ * {@link SceneManager} (Extensibilidad N-Escenas).
  */
 export const REGISTRO_ESCENAS: RegistroEscena[] = [
   { id: 'portada', crear: () => new PortadaScene() as unknown as EscenaJugable, habilitada: true },
@@ -73,9 +73,8 @@ export const REGISTRO_ESCENAS: RegistroEscena[] = [
   { id: 'plataformas', crear: () => new NivelPlataformas(), habilitada: true },
   { id: 'ritmo', crear: () => new NivelRitmo(), habilitada: true },
   { id: 'shooter', crear: () => new NivelShooter(), habilitada: true },
-  // [SEAM — Tarea 11.5] Escena_Carreras: entrada opcional deshabilitada. Prueba
-  // la extensibilidad N-Escenas (Requirement 9.7): se añade aquí sin tocar el
-  // SceneManager ni el Motor_Scoring. El SceneManager NO la registra mientras
-  // `habilitada === false`; activarla es tan simple como ponerla en `true`.
-  { id: 'carreras', crear: () => new EscenaCarreras(), habilitada: false },
+  // [Tarea 11.2] Escena_Carreras: habilitada. Extensibilidad N-Escenas
+  // (Requirement 9.7): se añade aquí sin tocar el SceneManager ni el
+  // Motor_Scoring. El SceneManager la registra con `habilitada === true`.
+  { id: 'carreras', crear: () => new EscenaCarreras(), habilitada: true },
 ];

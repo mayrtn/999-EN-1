@@ -128,13 +128,14 @@ function crearSesionDoble(): IAlmacenSesion {
   };
 }
 
-/** Registro de prueba con `carreras` deshabilitada (como hará la tarea 11.5). */
+/** Registro de prueba con `carreras` habilitada (Tarea 11.2). */
 const REGISTRO_PRUEBA: RegistroEscena[] = [
+  { id: 'portada', crear: () => crearEscenaDoble('portada'), habilitada: true },
   { id: 'seleccion_personaje', crear: () => crearEscenaDoble('seleccion_personaje'), habilitada: true },
   { id: 'plataformas', crear: () => crearEscenaDoble('plataformas'), habilitada: true },
   { id: 'ritmo', crear: () => crearEscenaDoble('ritmo'), habilitada: true },
   { id: 'shooter', crear: () => crearEscenaDoble('shooter'), habilitada: true },
-  { id: 'carreras', crear: () => crearEscenaDoble('carreras'), habilitada: false },
+  { id: 'carreras', crear: () => crearEscenaDoble('carreras'), habilitada: true },
 ];
 
 /** Input de prueba neutro. */
@@ -178,13 +179,13 @@ describe('SceneManager — registro declarativo (Requirement 9.7)', () => {
     expect(registradas).toContain('plataformas');
     expect(registradas).toContain('ritmo');
     expect(registradas).toContain('shooter');
-    // 'carreras' está deshabilitada: no debe registrarse (Requirement 9.7).
-    expect(registradas).not.toContain('carreras');
+    // 'carreras' está habilitada (Tarea 11.2): debe registrarse (Requirement 9.7, 7.6).
+    expect(registradas).toContain('carreras');
   });
 
-  it('expone las Escenas habilitadas sin incluir las deshabilitadas', () => {
+  it('expone las Escenas habilitadas incluyendo carreras', () => {
     const { sm } = crearSceneManager();
-    expect(sm.escenasHabilitadas()).toEqual(['seleccion_personaje', 'plataformas', 'ritmo', 'shooter']);
+    expect(sm.escenasHabilitadas()).toEqual(['portada', 'seleccion_personaje', 'plataformas', 'ritmo', 'shooter', 'carreras']);
   });
 });
 
@@ -212,8 +213,8 @@ describe('SceneManager — arranque (Requirements 1.1, 8.4)', () => {
     sm.registrarEscenas();
     await sm.iniciar();
 
-    const seleccion = escenas.get('seleccion_personaje');
-    expect(seleccion?.setInput).toHaveBeenCalledWith(inputDoble);
+    const portada = escenas.get('portada');
+    expect(portada?.setInput).toHaveBeenCalledWith(inputDoble);
   });
 });
 
@@ -221,7 +222,7 @@ describe('SceneManager — transiciones (Requirements 8.2, 8.4, 8.5)', () => {
   it('muestra la carga, detiene la Escena actual y arranca el destino con perillas', async () => {
     const { sm, gestor, llamadas } = crearSceneManager();
     sm.registrarEscenas();
-    await sm.iniciar(); // deja 'seleccion_personaje' como escena actual
+    await sm.iniciar(); // deja 'portada' como escena actual
 
     // Una Escena solicita ir a 'ritmo' (acceso oculto).
     sm.solicitarTransicion('ritmo');
@@ -231,7 +232,7 @@ describe('SceneManager — transiciones (Requirements 8.2, 8.4, 8.5)', () => {
     );
     void gestor;
 
-    const idxStop = llamadas.findIndex((l) => l.metodo === 'stop' && l.clave === 'seleccion_personaje');
+    const idxStop = llamadas.findIndex((l) => l.metodo === 'stop' && l.clave === 'portada');
     const idxCarga = llamadas.findIndex((l) => l.metodo === 'start' && l.clave === ID_CARGA);
     const idxDestino = llamadas.findIndex((l) => l.metodo === 'start' && l.clave === 'ritmo');
 
@@ -279,17 +280,18 @@ describe('SceneManager — transiciones (Requirements 8.2, 8.4, 8.5)', () => {
     expect(datos && esPerillasValidas(datos.perillas)).toBe(true);
   });
 
-  it('ignora una transición a una Escena no habilitada sin romper el flujo', async () => {
+  it('ignora una transición a una Escena no registrada sin romper el flujo', async () => {
     const { sm, llamadas } = crearSceneManager();
     sm.registrarEscenas();
     await sm.iniciar();
 
-    sm.solicitarTransicion('carreras');
+    // Solicitar transición a un id que no existe en el registro.
+    sm.solicitarTransicion('inexistente' as EscenaId);
     // Damos margen a un posible microtask.
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(llamadas.some((l) => l.metodo === 'start' && l.clave === 'carreras')).toBe(false);
+    expect(llamadas.some((l) => l.metodo === 'start' && l.clave === 'inexistente')).toBe(false);
   });
 });
 

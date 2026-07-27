@@ -3,7 +3,7 @@
  *
  * Verifican el contrato/lógica de la escena de ritmo SIN arrancar un mundo
  * Phaser real:
- * - Acotado de duración a `[60000, 90000]` ms (Requirement 2.1, contexto).
+ * - Acotado de duración a `[30000, 50000]` ms (Requirement 2.1, contexto).
  * - Acierto dentro de la ventana de acierto (Requirement 2.2).
  * - Fallo fuera de la ventana de todo beat (Requirement 2.3).
  * - Fin por duración: emite telemetría y solicita retorno una sola vez
@@ -28,7 +28,7 @@ vi.mock('phaser', () => {
   }
   const Clamp = (valor: number, min: number, max: number): number =>
     globalThis.Math.min(globalThis.Math.max(valor, min), max);
-  return { default: { Scene, Math: { Clamp } } };
+  return { default: { Scene, Math: { Clamp }, BlendModes: { ADD: 1 } } };
 });
 
 import { NivelRitmo } from './NivelRitmo';
@@ -37,14 +37,14 @@ import { NivelRitmo } from './NivelRitmo';
 const VENTANA_ACIERTO_MS = 150;
 const UMBRAL_AJUSTADO_MS = 90;
 const CURIOSIDAD_MAX = 3;
-const DURACION_MIN_MS = 60000;
-const DURACION_MAX_MS = 90000;
-const DURACION_DEFECTO_MS = 75000;
+const DURACION_MIN_MS = 30000;
+const DURACION_MAX_MS = 50000;
+const DURACION_DEFECTO_MS = 40000;
 
 /** Beat falso: sólo el sprite con `setVisible` espiable, como usa la escena. */
 function crearBeatFalso(tiempoObjetivo: number) {
   return {
-    sprite: { setVisible: vi.fn() },
+    sprite: { setVisible: vi.fn(), x: 400, y: 300 },
     tiempoObjetivo,
     juzgada: false,
   };
@@ -59,6 +59,27 @@ function crearShellMock() {
   };
 }
 
+/** Stub de los colaboradores de Phaser que usan los efectos visuales. */
+function stubVisuales(i: EscenaInterna): void {
+  const chainable = () => ({
+    setDepth: vi.fn().mockReturnThis(),
+    setBlendMode: vi.fn().mockReturnThis(),
+    setAlpha: vi.fn().mockReturnThis(),
+    destroy: vi.fn(),
+    explode: vi.fn(),
+  });
+  i.add = {
+    particles: vi.fn(() => chainable()),
+    rectangle: vi.fn(() => chainable()),
+    circle: vi.fn(() => chainable()),
+  };
+  i.tweens = { add: vi.fn() };
+  i.time = { delayedCall: vi.fn(), now: 0 };
+  i.scale = { width: 800, height: 600 };
+  i.laneX = 400;
+  i.hitLineY = 500;
+}
+
 /** Acceso tipado laxo a los internos privados de la escena. */
 type EscenaInterna = {
   duracionMs: number;
@@ -70,8 +91,15 @@ type EscenaInterna = {
   curiosidadSenal: number;
   tiempoInicio: number;
   finalizado: boolean;
+  esperandoInicio: boolean;
   shell: unknown;
   hud: unknown;
+  add: unknown;
+  tweens: unknown;
+  time: unknown;
+  scale: unknown;
+  laneX: number;
+  hitLineY: number;
   procesarPulsacion(transcurrido: number): void;
   finalizar(): void;
 };
@@ -83,19 +111,19 @@ function interna(escena: NivelRitmo): EscenaInterna {
 
 describe('NivelRitmo', () => {
   describe('acotado de duración (Requirement 2.1)', () => {
-    it('acota por debajo un valor menor al mínimo (30000 → 60000)', () => {
-      const escena = new NivelRitmo(30000);
+    it('acota por debajo un valor menor al mínimo (10000 → 30000)', () => {
+      const escena = new NivelRitmo(10000);
       expect(interna(escena).duracionMs).toBe(DURACION_MIN_MS);
     });
 
-    it('acota por arriba un valor mayor al máximo (120000 → 90000)', () => {
+    it('acota por arriba un valor mayor al máximo (120000 → 50000)', () => {
       const escena = new NivelRitmo(120000);
       expect(interna(escena).duracionMs).toBe(DURACION_MAX_MS);
     });
 
     it('preserva un valor dentro del rango válido', () => {
-      const escena = new NivelRitmo(70000);
-      expect(interna(escena).duracionMs).toBe(70000);
+      const escena = new NivelRitmo(40000);
+      expect(interna(escena).duracionMs).toBe(40000);
     });
 
     it('usa la duración por defecto en rango cuando no se pasa argumento', () => {
@@ -154,6 +182,7 @@ describe('NivelRitmo', () => {
     it('registra ACIERTO y marca el beat como juzgado cuando cae en ventana', () => {
       const escena = new NivelRitmo();
       const i = interna(escena);
+      stubVisuales(i);
       const beat = crearBeatFalso(3000);
       i.beats = [beat];
 
@@ -170,6 +199,7 @@ describe('NivelRitmo', () => {
     it('un acierto con timing ajustado (>90 ms) suma a Riesgo', () => {
       const escena = new NivelRitmo();
       const i = interna(escena);
+      stubVisuales(i);
       const beat = crearBeatFalso(3000);
       i.beats = [beat];
 
@@ -185,6 +215,7 @@ describe('NivelRitmo', () => {
     it('elige el beat más cercano cuando hay varios en ventana', () => {
       const escena = new NivelRitmo();
       const i = interna(escena);
+      stubVisuales(i);
       const cercano = crearBeatFalso(3000);
       const lejano = crearBeatFalso(3140);
       i.beats = [lejano, cercano];
@@ -201,6 +232,7 @@ describe('NivelRitmo', () => {
     it('registra FALLO cuando no hay beat en ventana', () => {
       const escena = new NivelRitmo();
       const i = interna(escena);
+      stubVisuales(i);
       const beat = crearBeatFalso(3000);
       i.beats = [beat];
 
@@ -216,6 +248,7 @@ describe('NivelRitmo', () => {
     it('registra FALLO justo fuera del borde de la ventana (151 ms)', () => {
       const escena = new NivelRitmo();
       const i = interna(escena);
+      stubVisuales(i);
       i.beats = [crearBeatFalso(3000)];
 
       i.procesarPulsacion(3000 + VENTANA_ACIERTO_MS + 1);
@@ -227,6 +260,7 @@ describe('NivelRitmo', () => {
     it('ignora beats ya juzgados y registra FALLO', () => {
       const escena = new NivelRitmo();
       const i = interna(escena);
+      stubVisuales(i);
       const beat = crearBeatFalso(3000);
       beat.juzgada = true;
       i.beats = [beat];
@@ -251,6 +285,7 @@ describe('NivelRitmo', () => {
       i.beats = [];
       i.hud = null;
       i.tiempoInicio = 1000;
+      i.esperandoInicio = false;
     });
 
     it('al agotarse la duración emite telemetría y solicita retorno a plataformas', () => {
