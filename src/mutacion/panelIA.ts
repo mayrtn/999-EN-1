@@ -72,11 +72,11 @@ export function mostrarPanelIA(escena: Phaser.Scene, perillas: PerillasMutacion,
     const cy = h / 2;
 
     // Fondo oscuro fullscreen
-    const fondoOscuro = escena.add.rectangle(cx, cy, w, h, 0x000000, 0.75)
+    escena.add.rectangle(cx, cy, w, h, 0x000000, 0.75)
       .setScrollFactor(0).setDepth(299);
 
     // Panel con borde de color según paleta
-    const panel = escena.add.rectangle(cx, cy, panelW, panelH, 0x080810, 0.96)
+    escena.add.rectangle(cx, cy, panelW, panelH, 0x080810, 0.96)
       .setScrollFactor(0).setDepth(300).setStrokeStyle(2, acento);
 
     // Borde interior sutil
@@ -89,7 +89,7 @@ export function mostrarPanelIA(escena: Phaser.Scene, perillas: PerillasMutacion,
     lineaGfx.lineBetween(cx - panelW / 2 + 20, cy - panelH / 2 + 28, cx + panelW / 2 - 20, cy - panelH / 2 + 28);
 
     // Título
-    const titulo = escena.add.text(cx, cy - panelH / 2 + 16, '⚡ LA IA MUTÓ EL JUEGO', {
+    escena.add.text(cx, cy - panelH / 2 + 16, '⚡ LA IA MUTÓ EL JUEGO', {
       fontFamily: '"Press Start 2P"',
       fontSize: '9px',
       color: '#' + acento.toString(16).padStart(6, '0'),
@@ -127,7 +127,7 @@ export function mostrarPanelIA(escena: Phaser.Scene, perillas: PerillasMutacion,
       .setOrigin(0.5).setScrollFactor(0).setDepth(301);
 
     // Mensaje de la IA (centrado abajo del panel)
-    const mensaje = escena.add.text(cx, cy + panelH / 2 - 30, `"${perillas.mensaje}"`, {
+    escena.add.text(cx, cy + panelH / 2 - 30, `"${perillas.mensaje}"`, {
       fontFamily: '"Press Start 2P"',
       fontSize: '7px',
       color: '#ffd24a',
