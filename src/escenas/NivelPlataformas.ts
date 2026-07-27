@@ -490,30 +490,30 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
   aplicarPerillas(perillas: PerillasMutacion): void {
     this.perillas = perillas;
 
-    // Panel visual dramático para la demo (muestra qué decidió la IA)
-    // Solo mostrar si ya hubo una transición previa (la IA real se invoca después
-    // de la primera escena; la primera vez siempre usa fallback local).
+    // Primera entrada a plataformas: sin mutación visual (limpio).
+    // Solo aplicar tint/clima/panel cuando ya se jugó algo antes.
     const yaJugoAntes = this.game.registry.get('ya_jugo_escena') === true;
-    if (yaJugoAntes) {
-      mostrarPanelIA(this, perillas, 5000);
-    }
-    // Marcar que ya se jugó una escena (para la próxima transición)
     this.game.registry.set('ya_jugo_escena', true);
 
-    // Mutación técnica (tint, clima, enemigos, audio, overlay)
-    // Tintar fondos de parallax según paleta (cambio visual dramático)
-    // Solo tintar si ya hubo una transición real (la IA decidió)
-    if (yaJugoAntes) {
-      const tintsFondo: Record<string, number> = {
-        infierno: 0xff4422,
-        sueno: 0x8855ff,
-        neon: 0x22ff88,
-        hostil: 0xaacc33,
-      };
-      const tintBg = tintsFondo[perillas.paleta] ?? 0xffffff;
-      if (this.bgLayer0) this.bgLayer0.setTint(tintBg);
-      if (this.bgLayer1) this.bgLayer1.setTint(tintBg);
+    if (!yaJugoAntes) {
+      // Primera vez: no aplicar nada visual, salir temprano
+      return;
     }
+
+    // Panel visual dramático para la demo (muestra qué decidió la IA)
+    mostrarPanelIA(this, perillas, 5000);
+
+    // Mutación técnica (tint, clima, enemigos, audio, overlay)
+    // Tintar fondos de parallax según paleta
+    const tintsFondo: Record<string, number> = {
+      infierno: 0xff4422,
+      sueno: 0x8855ff,
+      neon: 0x22ff88,
+      hostil: 0xaacc33,
+    };
+    const tintBg = tintsFondo[perillas.paleta] ?? 0xffffff;
+    if (this.bgLayer0) this.bgLayer0.setTint(tintBg);
+    if (this.bgLayer1) this.bgLayer1.setTint(tintBg);
 
     const spritesTintables: Phaser.GameObjects.Sprite[] = [
       ...(this.jugadorUsaPlaceholder ? [this.jugador] : []),
@@ -719,7 +719,7 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
    * la pantalla de "NIVEL COMPLETADO" con estadísticas.
    */
   private crearPuertaFinal(): void {
-    const puertaX = ANCHO_MUNDO - 60;
+    const puertaX = ANCHO_MUNDO - 30;
     const puertaY = ALTO_MUNDO - 32 - 56; // sobre el suelo
 
     // Arco de la puerta (visual, más grande)
@@ -1048,8 +1048,8 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
       this.oportunidadCuriosidad
     );
 
-    // Feedback visual: el acceso "se abre".
-    acceso.objeto.setFillStyle(0x8affc1, 0.6);
+    // Feedback visual: el acceso "se ilumina" suavemente.
+    acceso.objeto.setFillStyle(0xffffff, 0.3);
 
     // Mark this portal as permanently used in the registry
     this.game.registry.set('portal_usado_' + acceso.destino, true);

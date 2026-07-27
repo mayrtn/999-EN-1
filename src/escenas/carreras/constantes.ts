@@ -10,13 +10,13 @@
 // ─── Velocidad ───────────────────────────────────────────────────────────────
 
 /** Velocidad mínima del vehículo (desacelerado total). */
-export const VELOCIDAD_BASE = 50;
+export const VELOCIDAD_BASE = 120;
 
 /** Velocidad máxima alcanzable sin boost. */
-export const VELOCIDAD_MAXIMA = 300;
+export const VELOCIDAD_MAXIMA = 450;
 
 /** Aceleración en unidades/s² al mantener dirección arriba. */
-export const ACELERACION = 150;
+export const ACELERACION = 200;
 
 /** Desaceleración natural en unidades/s² cuando no se acelera. */
 export const DESACELERACION = 80;

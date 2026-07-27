@@ -115,3 +115,16 @@ npx cdk destroy
 ## Equipo
 
 Proyecto para el Hackaton de Código Facilito.
+
+## Créditos de assets
+
+| Asset | Fuente |
+|-------|--------|
+| Personajes | [Free Pixel Art Tiny Hero Sprites — CraftPix](https://craftpix.net/freebies/free-pixel-art-tiny-hero-sprites/) |
+| Monedas | [Gems & Coins Free — LaRedGames](https://laredgames.itch.io/gems-coins-free) |
+| Plataforma (tileset) | [Free Crystal Caves 2D Platformer Tileset — CraftPix](https://craftpix.net/freebies/free-crystal-caves-2d-platformer-tileset/) |
+| Aliens | [Arcade Style Ghosts — Checkpoint Cafe](https://checkpointcafe.itch.io/arcadestyleghosts) |
+| Dinamita | [Minerman Adventure — Tumas81](https://tumas81.itch.io/minerman-adventure) |
+| Autos | [Top Down Pixel Art Race Cars — AIM Studios](https://aim-studios.itch.io/top-down-pixel-art-race-cars) |
+| Árbol | [Árbol pixel PNG — Magnific](https://www.magnific.com/es/vectores/arbol-pixel-png) |
+| Arbusto | [Pixel arbustos — Vecteezy](https://es.vecteezy.com/arte-vectorial/22908198-pixel-arbustos-o-arbustos-con-verdor-y-follaje) |
