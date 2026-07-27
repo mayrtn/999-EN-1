@@ -32,16 +32,17 @@ import type {
   PerillasMutacion,
   SpawnerEnemigos,
   TelemetriaRasgos,
+  GestorAudio,
 } from '../contrato';
 import {
   SistemaMutacion,
-  GestorAudioPhaser,
   OverlayTextoPhaser,
   crearCapaClima,
   asegurarTexturaParticula,
 } from '../mutacion';
 import { mostrarPanelIA } from '../mutacion/panelIA';
 import { sfxShoot, sfxHit } from '../audio/sfx';
+import { crearGestorAudio } from '../audio/gestorAudioHibrido';
 import { CLAVE_PERSONAJE } from './EscenaSeleccion';
 
 /** Duración mínima de la sesión (Requirement 3.1), en milisegundos. */
@@ -134,7 +135,7 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
   /** Sistema_Mutacion que aplica las perillas (Requirement 7). */
   private readonly sistemaMutacion = new SistemaMutacion();
   /** Gestor de audio para el mood musical (Requirement 7.5). */
-  private gestorAudio?: GestorAudioPhaser;
+  private gestorAudio?: GestorAudio;
   /** Overlay de texto para el mensaje de la IA (Requirement 7.6). */
   private overlayTexto?: OverlayTextoPhaser;
 
@@ -272,7 +273,7 @@ export class NivelShooter extends Phaser.Scene implements IEscena {
       .setVisible(false);
 
     // Colaboradores de mutación (Requirement 7).
-    this.gestorAudio = new GestorAudioPhaser(this);
+    this.gestorAudio = crearGestorAudio(this);
     this.overlayTexto = new OverlayTextoPhaser(this);
 
     // Aplica las perillas recibidas, si las hay (Requirements 3.6, 9.4).

@@ -60,6 +60,7 @@ import { calcularFallback } from '../mutacion';
 import { InputTeclado } from '../input';
 import { CLAVE_PERFIL_JUGADOR } from './BootScene';
 import { LoadingScene, ID_CARGA } from './LoadingScene';
+import { ResumenPerfilScene, ID_RESUMEN } from '../escenas/ResumenPerfilScene';
 import {
   REGISTRO_ESCENAS,
   type EscenaJugable,
@@ -213,6 +214,9 @@ export class SceneManager implements IShell {
   registrarEscenas(): void {
     // Pantalla de carga (infraestructura del Shell, Requirement 8.2).
     this.gestor.add(ID_CARGA, new LoadingScene(), false);
+
+    // Pantalla de resumen de perfil (infraestructura del Shell).
+    this.gestor.add(ID_RESUMEN, new ResumenPerfilScene(), false);
 
     for (const entrada of this.registro) {
       if (!entrada.habilitada) continue;

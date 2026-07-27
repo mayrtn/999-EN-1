@@ -62,14 +62,14 @@ describe('calcularFallback — Property 6: perillas siempre válidas', () => {
 });
 
 describe('calcularFallback — unit tests de ejemplo (Task 4.3)', () => {
-  it('perfil neutro (todos 0) → paleta infierno, clima ninguno, mood calma, intensidad/agresividad 0', () => {
+  it('perfil neutro (todos 0) → paleta infierno, clima niebla, mood calma, intensidad/agresividad 0', () => {
     const perfil = perfilDe({ furia: 0, curiosidad: 0, logro: 0, riesgo: 0 });
 
     const perillas = calcularFallback(perfil);
 
     // Empate total en 0 → gana furia por el orden de desempate.
     expect(perillas.paleta).toBe('infierno');
-    expect(perillas.clima).toBe('ninguno');
+    expect(perillas.clima).toBe('niebla');
     expect(perillas.mood_musica).toBe('calma');
     expect(perillas.intensidad_enemigos).toBe(0);
     expect(perillas.agresividad).toBe(0);
