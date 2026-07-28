@@ -295,6 +295,8 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     this.cooldownRiesgo = 0;
     this.factorAgresividad = 1;
     this.entradaBloqueada = false;
+    this.spawnX = 80;
+    this.spawnY = 440;
     this.senalFuria = 0;
     this.senalCuriosidad = 0;
     this.senalLogro = 0;
@@ -375,13 +377,17 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     this.crearPlataformas();
     this.crearJugador();
 
-    // Restaurar posición del jugador si viene de un portal
-    const posSaved = this.game.registry.get('plataformas_posicion') as { x: number; y: number } | null;
-    if (posSaved) {
-      this.jugador.setPosition(posSaved.x, posSaved.y);
-      this.spawnX = posSaved.x;
-      this.spawnY = posSaved.y;
-      this.game.registry.remove('plataformas_posicion');
+    // Solo restaurar posición si venimos de un sub-nivel (portal oculto)
+    // El flag 'restaurar_posicion_plataformas' se setea SOLO en activarAcceso
+    const restaurar = this.game.registry.get('restaurar_posicion_plataformas');
+    if (restaurar) {
+      const posSaved = this.game.registry.get('plataformas_posicion') as { x: number; y: number } | undefined;
+      if (posSaved) {
+        this.jugador.setPosition(posSaved.x, posSaved.y);
+        this.spawnX = posSaved.x;
+        this.spawnY = posSaved.y;
+      }
+      this.game.registry.set('restaurar_posicion_plataformas', false);
     }
 
     this.crearMonedas();
@@ -422,12 +428,15 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
 
     // ─── HUD: conteo de monedas y cristales ──────────────────────────────
     const hudStyle = { fontFamily: '"Press Start 2P"', fontSize: '10px', color: '#ffffff', stroke: '#000000', strokeThickness: 3 };
+    // Leer conteos persistidos del registry (para cuando se vuelve de un portal)
+    const monedasPersistidas = ((this.game.registry.get('monedas_recolectadas') as number[]) ?? []).length;
+    const cristalesPersistidos = ((this.game.registry.get('cristales_recolectados') as number[]) ?? []).length;
     // Moneda sprite + texto
     this.add.sprite(24, 22, 'coin_gold').setScrollFactor(0).setDepth(100).setScale(1.5);
-    this.add.text(42, 16, `0/${MONEDAS.length}`, hudStyle).setScrollFactor(0).setDepth(100).setName('hud_monedas');
+    this.add.text(42, 16, `${monedasPersistidas}/${MONEDAS.length}`, hudStyle).setScrollFactor(0).setDepth(100).setName('hud_monedas');
     // Cristal sprite + texto
     this.add.sprite(24, 48, 'star_collect').setScrollFactor(0).setDepth(100).setScale(0.18);
-    this.add.text(42, 42, `0/${PUNTOS_EXPLORACION.length}`, hudStyle).setScrollFactor(0).setDepth(100).setName('hud_cristales');
+    this.add.text(42, 42, `${cristalesPersistidos}/${PUNTOS_EXPLORACION.length}`, hudStyle).setScrollFactor(0).setDepth(100).setName('hud_cristales');
     // Vidas (corazones) — arriba a la derecha
     const camW = this.cameras.main.width;
     this.add.text(camW - 20, 16, '❤️'.repeat(this.vidas), {
@@ -537,15 +546,16 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
 
     // Después de que el panel se cierre (4.2s), mostrar resumen de perfil automáticamente
     // si el jugador ya jugó al menos un sub-nivel (para que los jueces lo vean)
-    const jugoPotal = ['ritmo', 'shooter', 'carreras'].some(
-      (d) => this.game.registry.get('portal_usado_' + d)
-    );
-    if (jugoPotal) {
-      this.time.delayedCall(4500, () => {
-        this.scene.pause();
-        this.scene.launch('resumen_perfil');
-      });
-    }
+    // DESHABILITADO: causaba freeze al volver del portal. El jugador puede usar TAB.
+    // const jugoPotal = ['ritmo', 'shooter', 'carreras'].some(
+    //   (d) => this.game.registry.get('portal_usado_' + d)
+    // );
+    // if (jugoPotal) {
+    //   this.time.delayedCall(4500, () => {
+    //     this.scene.pause();
+    //     this.scene.launch('resumen_perfil');
+    //   });
+    // }
 
     // Mutación técnica (tint, clima, enemigos, audio, overlay)
     // Tintar fondos de parallax según paleta
@@ -929,6 +939,10 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     this.physics.add.overlap(this.jugador, zona, () => {
       if (this.game.registry.get('nivel_completado')) return;
       this.game.registry.set('nivel_completado', true);
+      // Resetear para que el próximo inicio sea limpio
+      this.game.registry.set('monedas_recolectadas', []);
+      this.game.registry.set('cristales_recolectados', []);
+      this.game.registry.set('restaurar_posicion_plataformas', false);
       this.mostrarNivelCompletado();
     });
 
@@ -1002,6 +1016,9 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
 
     // Después de 4 segundos, reportar telemetría y volver a plataformas (mutado por IA)
     this.time.delayedCall(4000, () => {
+      this.game.registry.set('nivel_completado', false);
+      // Forzar que NO se restaure posición al volver
+      this.game.registry.set('restaurar_posicion_plataformas', false);
       // Reportar telemetría al Shell para que la IA pueda mutar
       if (this.shell) {
         this.shell.reportarTelemetria(this.construirTelemetria());
@@ -1282,6 +1299,7 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
    */
   private activarAcceso(acceso: AccesoOculto): void {
     if (acceso.activado) return;
+    if (this.game.registry.get('nivel_completado')) return; // No activar portales después de completar
     acceso.activado = true;
     sfxPortal();
 
@@ -1299,6 +1317,7 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
     // Guardar posición del jugador para regresar al mismo punto
     this.posicionAnteDePortal = { x: this.jugador.x, y: this.jugador.y };
     this.game.registry.set('plataformas_posicion', this.posicionAnteDePortal);
+    this.game.registry.set('restaurar_posicion_plataformas', true);
 
     // --- Pantalla de "Entrando al portal" ---
     // Congelar al jugador
@@ -1602,7 +1621,7 @@ export class NivelPlataformas extends Phaser.Scene implements IEscena {
       .setDepth(101);
 
     const controles = this.add
-      .text(camW / 2, camH / 2, '← → MOVER  |  ↑ SALTAR  |  SPACE SALTAR\n\n⚔️ SALTÁ SOBRE LOS ENEMIGOS PARA MATARLOS', {
+      .text(camW / 2, camH / 2, '← → MOVER  |  SPACE SALTAR\n\n⚔️ SALTÁ SOBRE LOS ENEMIGOS PARA MATARLOS', {
         fontFamily: '"Press Start 2P"',
         fontSize: '8px',
         color: '#ffffff',

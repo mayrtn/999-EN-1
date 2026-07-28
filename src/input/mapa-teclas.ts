@@ -81,7 +81,7 @@ export const MAPA_TECLAS: MapaTeclas = {
   abajo: [CODIGOS_TECLA.DOWN, CODIGOS_TECLA.S],
   izquierda: [CODIGOS_TECLA.LEFT, CODIGOS_TECLA.A],
   derecha: [CODIGOS_TECLA.RIGHT, CODIGOS_TECLA.D],
-  accionPrimaria: [CODIGOS_TECLA.SPACE, CODIGOS_TECLA.UP, CODIGOS_TECLA.W],
+  accionPrimaria: [CODIGOS_TECLA.SPACE],
   accionSecundaria: [CODIGOS_TECLA.SHIFT],
   pausa: [CODIGOS_TECLA.ESC, CODIGOS_TECLA.P],
 } as const;
